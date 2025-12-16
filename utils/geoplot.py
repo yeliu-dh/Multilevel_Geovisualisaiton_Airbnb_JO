@@ -102,7 +102,11 @@ def locate_points(path_listings, path_map, CRS,
 
 
 
-def get_choropleth_map(path_gdf_joined, path_gdf_map, groupby="c_ar",
+
+
+
+
+def get_choropleth_map(gdf_joined, gdf_map, groupby="c_ar",
                               loc="paris", year="2024",title=None,
                               save=False, OUTPUT_FOLDER=None,filename=None):
     
@@ -119,8 +123,8 @@ def get_choropleth_map(path_gdf_joined, path_gdf_map, groupby="c_ar",
     # )
     
     # gdf_joined在groupby之后geo消失，必须按照groupby col贴回map
-    gdf_joined=read_gdf(path_gdf_joined)
-    gdf_map=read_gdf(path_gdf_map)
+    # gdf_joined=read_gdf(path_gdf_joined)
+    # gdf_map=read_gdf(path_gdf_map)
 
     #count:
     # group = gdf_joined.groupby(groupby).size().sort_values(ascending=False)
