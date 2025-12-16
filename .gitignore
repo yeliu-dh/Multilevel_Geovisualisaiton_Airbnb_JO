@@ -1,8 +1,7 @@
 sandbox/*
-data/*
-data_processed/*
+data*/*
 notebooks/*
-
+gdf_*/*
 
 
 

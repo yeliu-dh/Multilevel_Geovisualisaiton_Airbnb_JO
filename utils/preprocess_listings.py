@@ -69,7 +69,6 @@ def desc_catORnum(df, vars):
 
 
 ##==================================HOST VARS============================================##
-
 import langid #这个库速度更快、稳定性高。
 def detect_language_langid(text):
     try:
@@ -85,9 +84,6 @@ def detect_language_langid(text):
 
     except Exception:
         return "unk"  # 检测失败的情况
-
-
-
 
 
 
@@ -227,15 +223,6 @@ def preprocess_host_variables(df_raw):
     # desc_catORnum(df, vars=var_processed)
     desc_catORnum(df, vars=impo_vars)
 
-    # for var in var_processed:
-    #     print(df[var].dtype)
-    #     if df[var].dtype =="int64" or df[var].dtype =="float64":#!="object"
-    #         print(df[var].describe(include='all'),"\n")
-    #     else :             
-    #         print(df[var].value_counts(dropna=False).sort_values(ascending=False),"\n")
-    #     print("-----------------------------------------------------------")
-
-
     # delect intermidate cols:optionnal
     # intermediate_cols=[]
     df=df.drop(columns=['days_since_host'])#?
@@ -243,7 +230,6 @@ def preprocess_host_variables(df_raw):
     end_time=time.time()
     print(f"\n✅[SUCCES] Process host variables : {end_time-start_time:.2f} sec!\n")
     
-
     return df
 
 
@@ -261,8 +247,15 @@ def preprocess_host_variables(df_raw):
 
 def filter_df(df, vars):
     df_filtered=df.copy()
-        
-    for var in vars :
+
+    # check vars :
+    vars_valid=[v for v in vars if v in df.columns ]
+    missings_vars=[v for v in vars if v not in vars_valid]
+    if len(missings_vars)>0:
+        print(f"[WARNING] missing vars in df : {'; '.join(missings_vars)}!!")
+    
+    # filter df
+    for var in vars_valid :
         len_before=len(df_filtered)
         df_filtered=df_filtered[df_filtered[var].notna()]
         len_after=len(df_filtered)
@@ -272,6 +265,7 @@ def filter_df(df, vars):
         f"len AFTER: {len(df_filtered)}\n")
    
     return df_filtered
+
 
 
 
@@ -311,7 +305,7 @@ def check_proxy_vars(df,proxy_vars=['price',"availability_90"], get_boooking_rat
 
 
 
-##==================================LOCATION============================================##
+##=======================================LOCATION============================================##
 
 def add_is_within_km(df, threshold_km):
     venues_df = pd.DataFrame([
@@ -371,11 +365,6 @@ def add_is_within_km(df, threshold_km):
     return df
 
 
-##==================================OBJ VAR ======================================##
-# 集合proxy+location处理
-# 描述！
-
-
 ##property type
 def categorize_property(ptype):
     if pd.isna(ptype) or str(ptype).strip() == "":
@@ -397,11 +386,14 @@ def categorize_property(ptype):
         return "others"
 
 
+
+##==================================PROXY +OBJ+LOCATION ======================================##
+
 def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_90"], 
                         get_boooking_rate_l30d=False, filtrate_by_booking_rate=False,#无输入时默认不按照booking筛选 
                         obj_vars=["room_type", 'property_type',"minimum_nights","instant_bookable"], 
                         threshold_km:int=None, 
-                        output_folder="mod_results", filename=None):
+                        output_folder="mod_results", filename="listings_filtered.csv"):
     # obj_vars=["room_type", "minimum_nights","instant_bookable"]#all ok,无缺失/异常
     # proxy_vars=['price',"availability_90"]
     
@@ -419,7 +411,7 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         f"3) obj vars :\n "
         f"- instant_bookable : fillna('f')\n"
         f"- minimum_nights : to_numeric, fillna(0)\n"
-        f"- property_type : ADD 'property_type_cat': entire, hotel, shared, private, others.\n"
+        f"- property_type : clean col : entire, hotel, shared, private, others.\n"
         
         
         f"3) filter : dropna on vars ==> desc df_filtered \n\n"
@@ -433,7 +425,8 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
      
     print("# ---------------------------proxy---------------------------")
     
-    df, proxy_vars=check_proxy_vars(df, proxy_vars=proxy_vars, get_boooking_rate_l30d=get_boooking_rate_l30d)
+    df, proxy_vars=check_proxy_vars(df, proxy_vars=proxy_vars, 
+                                    get_boooking_rate_l30d=get_boooking_rate_l30d)
     vars_to_dropna.extend(proxy_vars)
     
     # all_vars.extend(proxy_vars)    
@@ -464,35 +457,38 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         2.1                    1
         Name: count, dtype: int64        
         """
-    
         df['room_type']=df['room_type'].apply(lambda x : x if x in ['Entire home/apt',"Private room","Hotel room", "Shared room"] else None)           
-        
         
     if "property_type" in obj_vars:
         df["property_type"] = df["property_type"].apply(categorize_property)
-
         
     vars_to_dropna.extend(obj_vars)
     
+
     if threshold_km!=None:    
-        print('# -----------------------location------------------------')
+        print('#-------------------------location------------------------')
         df=add_is_within_km(df,threshold_km=3)
-        vars_to_dropna.extend(f'is_within_{threshold_km}km')
+        vars_to_dropna.append(f'is_within_{threshold_km}km')# extend (list)!        
+        
         
     print("# -----------------------filter & desc-------------------------")
     vars_to_dropna=list(set(vars_to_dropna))
+    print(f"[INFO] vars to dropna:{'; '.join(vars_to_dropna)}")
+    
     df_filtered=filter_df(df,vars=vars_to_dropna)
     desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
     
     # save
     os.makedirs(output_folder, exist_ok=True)
-    if filename is None:#不指定名字则用默认名字listings_filtered
-        filename="listings_filtered.csv"
     outpath_df_filtered=os.path.join(output_folder, filename)
     df_filtered.to_csv(outpath_df_filtered, index=False)
-    print(f"\n✅[SAVE] {len(df_filtered)} lines df_filtered saved to {outpath_df_filtered}!")
+    
+    print(f"\n✅[SAVE] {len(df_filtered)} lines df_filtered saved to '{outpath_df_filtered}'!")
     
     return df_filtered
+
+
+
 
 
 
@@ -527,13 +523,16 @@ def group_mean_table(df, cols, group_col='host_is_superhost'):
 
 def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
                            save=False, output_folder="mod_results", filename_noext=None):
-
-    os.makedirs(output_folder, exist_ok=True)     
     from scipy.stats import ttest_ind
+
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)     
     
     if group_col in cols_to_check :
         cols_to_check.remove(group_col)
-        
+        print(f"[CHECK] remove group_col '{group_col}' from vars")
+
+
     # ------------------------------------check groups----------------------------------
     groups = df[group_col].unique()
     

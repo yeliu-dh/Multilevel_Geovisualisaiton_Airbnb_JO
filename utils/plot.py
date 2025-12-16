@@ -13,33 +13,45 @@ def read_gdf(gdf_path):
     # print(f"scr :{gdf.crs}\n")
     return gdf
  
-def save_gdf(gdf, gdf_path):
-    if not gdf_path.endswith(".shp"):
-        print(f"[WARNING] check extension of gdf_path, should end with '.shp'!")
-
-    os.makedirs(os.path.dirname(gdf_path), exist_ok=True)
-
-    gdf.to_file(gdf_path, driver="ESRI Shapefile", encoding="utf-8")
+def save_gdf(gdf, outpath_gdf):
+    
+    if not outpath_gdf.endswith(".gpkg"):
+        # shp文件无法接受col name大于10个字符，改用gpkg！
+        print(f"[WARNING] check extension of outpath_gdf, should end with '.gpkg'!")
+         
+    os.makedirs(os.path.dirname(outpath_gdf), exist_ok=True)
+    gdf.to_file(outpath_gdf, driver="GPKG", encoding="utf-8")
+    # driver="ESRI Shapefile"
+    
+    print(f"☑️ [SAVE] gpkg file saved to {outpath_gdf}!")
     return 
 
 
-def df2gdf(df, gdf_path, crs="EPSG:4326"):
-    print(f"len df: {len(df)}")
 
+
+
+
+def df2gdf(df, crs="EPSG:4326",  save=False, OUTPUT_FOLDER=None, filename=None):
+    print(f"[INFO] len df: {len(df)}\n"
+          f"default crs 'EPSG:4326'!")
+    
+    # check
     if not 'longitude' in df or not 'latitude' in df:
         print(f"[ERROR] 'latitude' or 'longitude' columns not found in df!!")
-
+   
+    # map 
     gdf=gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df.longitude, df.latitude),
         crs=crs
     )
-    print(f"df => gdf in crs {crs}:\n")
     display(gdf.head())
     
-
-    save_gdf(gdf, gdf_path)
-    print(f"gdf saved to {gdf_path}!")
+    # save
+    if save and OUTPUT_FOLDER and filename:
+        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+        outpath_shp=os.path.join(OUTPUT_FOLDER,filename)    
+        save_gdf(gdf, outpath_shp)
 
     return 
 

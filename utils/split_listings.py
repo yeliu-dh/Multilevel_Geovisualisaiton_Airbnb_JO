@@ -176,26 +176,26 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     #==============================================SPLIT==============================================
     print("split  changed and stable hosts".center(100,'-'))
     print(f"[INFO] 3 criterions : \n"
-          f"NEW host : reactive or host in between '{YEAR}-01-01'~'{YEAR}-06-30';\n"
-          f"BIO change in Q2;\n"
-          f"PIC change in Q2 \n"
-          f"=> ADD 'is_changed'")
+        f"- NEW hosts enter between '{YEAR}-01-01'~'{YEAR}-06-30';\n"
+        f"- Reactive hosts : host_since not in Q1/Q2; active not in Q1, but in Q2 \n"
+        f"=> ADD 'status_changed'"
+        f"-BIO change in Q2;\n"
+        f"-PIC change in Q2 \n"
+        f"=> ADD 'sp_changed'\n"
+        f"==> ADD 'is_changed'\n")
     
     #----------------------summary-----------------------
     dfQ2=df[df['scraped_date']==f'{YEAR}Q2']   
     
     
-    # #房东市场行为变化统计：
-    print(f"[INFO] host status in Q2:\n {dfQ2.status.value_counts(dropna=False)}\n")   
-
     # 房东自我展示行为变化统计：
     # 新房东/新文本/改动bio超过THRESHD_TEXT_CHANGE填1，反之为0:
-    print(f"[INFO] host BIO change in Q2: 1/0:"
-        f"{dfQ2.host_about_changed.value_counts(dropna=False)}"
-        )    
-    print(f"[INFO] PIC change in Q2: 1/0:"
-        f"{dfQ2.host_picture_url_changed.value_counts(dropna=False)}"
-    )
+    # print(f"[INFO] host BIO change in Q2: 1/0:"
+    #     f"{dfQ2.host_about_changed.value_counts(dropna=False)}"
+    #     )    
+    # print(f"[INFO] PIC change in Q2: 1/0:"
+    #     f"{dfQ2.host_picture_url_changed.value_counts(dropna=False)}"
+    # )
     
     # ## 整合bio AND/OR pic changes :
     # def presentation_change_level(row):
@@ -204,25 +204,59 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     #     pic_change = 1 if row.get('host_picture_url_changed') == 1 else 0
     #     return bio_change+pic_change  #记录为数组 或加减数值 0,1,2 分别代表不同程度变化
     # dfQ2['presentation_change'] = dfQ2.apply(presentation_change_level, axis=1)
-  
+    
+    
+    def get_change_levels(df):
+        # status
+        df['status_changed'] = (
+            (df['status'].isin(['new_host', 'reactive_host']))
+        ).astype(int) # return T/F=>1/0
+        
+        #SP 
+        df['sp_changed'] = (
+            (df['host_about_changed']==1)|
+            (df['host_picture_url_changed']==1)
+        ).astype(int)
+        
+        #overall
+        df['is_changed'] = (
+            (df['status_changed']==1)|
+            (df['sp_changed']==1)
+        ).astype(int)
+        return df
+    dfQ2=get_change_levels(dfQ2)
+    
+
+    print(f"[INFO] host status in Q2:\n {dfQ2.status.value_counts(dropna=False)}\n")   
+
+    print(f"[INFO] host BIO change in Q2: 1/0:"
+        f"{dfQ2.host_about_changed.value_counts(dropna=False)}\n")
+        
+    print(f"[INFO] PIC change in Q2: 1/0:"
+        f"{dfQ2.host_picture_url_changed.value_counts(dropna=False)}\n")
+    
+    print(f"[INFO] SP changed in Q2: 1/0:\n"
+          f"{dfQ2.sp_changed.value_counts(dropna=False)}\n")
+    
+    print(f"[INFO] OVERALL changed : {len(dfQ2[dfQ2['is_changed']==1])}; stable : {len(dfQ2[dfQ2['is_changed']==0])}\n")
+         
     
     # ----------------整合4 changes---------------
     # new_host| reactive_host | host_about_change| host_pic_change：
-    dfQ2['is_changed'] = (
-        (dfQ2['status'].isin(['new_host', 'reactive_host'])) |#OR
-        # (dfQ2['presentation_change'] > 0)
-        (dfQ2['host_about_changed']==1)|
-        (dfQ2['host_picture_url_changed']==1)
-    )    #返回T/F
+    # dfQ2['is_changed'] = (
+    #     (dfQ2['status'].isin(['new_host', 'reactive_host'])) |#OR
+    #     # (dfQ2['presentation_change'] > 0)
+    #     (dfQ2['host_about_changed']==1)|
+    #     (dfQ2['host_picture_url_changed']==1)
+    # )    #返回T/F
     
     ## -----------------split--------------------
-    df_change = dfQ2[dfQ2['is_changed']]
-    df_stable = dfQ2[~dfQ2['is_changed']]
-    print(f"[INFO] len change:{len(df_change)}; len stable {len(df_stable)}")
+    # df_change = dfQ2[dfQ2['is_changed']]
+    # df_stable = dfQ2[~dfQ2['is_changed']]
     
     # ------------------save---------------------
     end_time=time.time()
-    print(f"[RUNTIME]{end_time-start_time:.2f} sec!")
+    print(f"[RUNTIME] done in {end_time-start_time:.2f} sec!")
     
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     outpath_df=os.path.join(OUTPUT_FOLDER, os.path.basename(path_Q2).replace('.csv', '_split.csv'))
