@@ -1,4 +1,9 @@
 sandbox/*
+data/*
+data_processed/*
+notebooks/*
+
+
 
 
 # Byte-compiled / optimized / DLL files
