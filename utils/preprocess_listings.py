@@ -106,7 +106,7 @@ def preprocess_host_variables(df_raw):
         #   ADD 'has_host_about':1/0',
           f"- host_response_time:{print_nan_ratio(df, col='host_response_time')*100}% NaN, fillna('no_response_time') \n"
           f"- host_response_rate:{print_nan_ratio(df, col='host_response_rate')*100}% NaN, ADD 'has_response_rate' :1/0， fillna(0)\n"
-          f"- calculated_host_listings_count : ADD 'professional_host:1/0'\n"
+          f"- calculated_host_listings_count : ADD 'professional_host:1/0', count>1\n"
           )
     
     
@@ -535,9 +535,7 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
 
     # ------------------------------------check groups----------------------------------
     groups = df[group_col].unique()
-    
     print(f"[CHECK] ttest takes only 2 groups! OR go to ANOVA!")
-
 
     if len(groups) != 2:
         # raise ValueError("ttest requires exactly 2 groups")
@@ -604,7 +602,9 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
                                         'f':"Autres"}
                                )  
         desired_order=['Superhôte','Autres','ttest_p','significance']
-        result=result[desired_order]        
+        result=result[desired_order]    
+        
+            
     # reorder:
 
     

@@ -187,25 +187,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     #----------------------summary-----------------------
     dfQ2=df[df['scraped_date']==f'{YEAR}Q2']   
     
-    
-    # 房东自我展示行为变化统计：
-    # 新房东/新文本/改动bio超过THRESHD_TEXT_CHANGE填1，反之为0:
-    # print(f"[INFO] host BIO change in Q2: 1/0:"
-    #     f"{dfQ2.host_about_changed.value_counts(dropna=False)}"
-    #     )    
-    # print(f"[INFO] PIC change in Q2: 1/0:"
-    #     f"{dfQ2.host_picture_url_changed.value_counts(dropna=False)}"
-    # )
-    
-    # ## 整合bio AND/OR pic changes :
-    # def presentation_change_level(row):
-    #     # 数值计算更加简单、可靠!
-    #     bio_change = 1 if row.get('host_about_changed') ==1 else 0
-    #     pic_change = 1 if row.get('host_picture_url_changed') == 1 else 0
-    #     return bio_change+pic_change  #记录为数组 或加减数值 0,1,2 分别代表不同程度变化
-    # dfQ2['presentation_change'] = dfQ2.apply(presentation_change_level, axis=1)
-    
-    
+
     def get_change_levels(df):
         # status
         df['status_changed'] = (
@@ -240,20 +222,6 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     
     print(f"[INFO] OVERALL changed : {len(dfQ2[dfQ2['is_changed']==1])}; stable : {len(dfQ2[dfQ2['is_changed']==0])}\n")
          
-    
-    # ----------------整合4 changes---------------
-    # new_host| reactive_host | host_about_change| host_pic_change：
-    # dfQ2['is_changed'] = (
-    #     (dfQ2['status'].isin(['new_host', 'reactive_host'])) |#OR
-    #     # (dfQ2['presentation_change'] > 0)
-    #     (dfQ2['host_about_changed']==1)|
-    #     (dfQ2['host_picture_url_changed']==1)
-    # )    #返回T/F
-    
-    ## -----------------split--------------------
-    # df_change = dfQ2[dfQ2['is_changed']]
-    # df_stable = dfQ2[~dfQ2['is_changed']]
-    
     # ------------------save---------------------
     end_time=time.time()
     print(f"[RUNTIME] done in {end_time-start_time:.2f} sec!")
