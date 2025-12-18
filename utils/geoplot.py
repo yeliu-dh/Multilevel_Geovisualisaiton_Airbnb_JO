@@ -102,54 +102,314 @@ def locate_points(path_listings, path_map, CRS,
     return gdf_joined
 
 
+ # val_col=groups.columns[1]
+    
+    # old count:
+    # group = gdf_joined.groupby(groupby).size().reset_index(name="count")
+
+# if num_col and num_col in gdf_joined and gdf_joined[num_col].notna().any():
+        #     print(f"[CHECK] NUMERIC values on mean_col/count_col :{gdf_joined[num_col].dtype}=> numeric!\n")   
+        #     gdf_joined[num_col]=pd.to_numeric(gdf_joined[num_col], errors='coerce')
+    
+    
+    
+    
+    
+# ================================fixed map===================================
 
 
 
-def get_choropleth_map(gdf_joined, gdf_map, groupby="c_ar",
-                              loc="paris", year="2024",title=None,
-                              save=False, output_folder=None,filename=None):
+def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
+            col, way,
+            loc, year, title=None,
+            # ax, vmin, vmax,
+            save=False, output_folder=None,filename=None
+            ):
+    
+    # 1/3 ways 
+    ways =["count", "mean","sum"]
+    if way not in ways :
+        print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+    
+    # check numeric !
+    
+    if way=="mean" or way=="sum":
+        print(f"[CHECK] needs numeric values for mean/sum! \n"
+              f" dtype :{gdf_joined[col].dtype}")
+        gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
 
-    #count:
-    # group = gdf_joined.groupby(groupby).size().sort_values(ascending=False)
-    group = gdf_joined.groupby(groupby).size().reset_index(name="count")
-
+    if groupby and col and way:# get nb abs  
+        #as_index=False 会自动把 Series 转成 DataFrame
+        # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
+        groups=gdf_joined.groupby(groupby, as_index=False).agg(
+                **{way:(col, way)}
+                # way=(col, way) #简写无法动态取way的值 
+        )
+    
+    # print(groups)
+    print(f"[CHECK] groups' type: {type(groups)}\n"
+          f"groups cols:{groups.columns}")
+   
     # merge to gdf_map: 把统计数字铁道map上
-    gdf_merged = gdf_map.merge(group, on=groupby, how="left")
+    gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
 
     #-------------------plot-------------------
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    # 热度轴：
     gdf_merged.plot(
-        column="count",
+        column=way,
         ax=ax,
         legend=True,
         cmap="OrRd",       # 红色系，表示“强度”
         edgecolor="black",
         linewidth=0.5
     )
-    # 绘制标注（区号）
+    
+    # gdf_merged.plot(
+        # column=way, 
+        # ax=ax, 
+        # cmap="OrRd", 
+        # vmin=vmin, 
+        # vmax=vmax, 
+        # legend=False,#小图不显示热度轴 
+        # edgecolor="black",
+        # linewidth=0.5
+
+        # )
+
+
+    # 坐标与文字： 
     for idx, row in gdf_merged.iterrows():
-        x = row["geometry"].centroid.x
-        y = row["geometry"].centroid.y
-        plt.text(
-            x, y, 
-            str(row[groupby]), 
-            horizontalalignment='center',
-            fontsize=8,
-            fontweight='bold'
-        )        
-        
+        x = row.geometry.centroid.x
+        y = row.geometry.centroid.y
+        ax.text(
+            x, y,
+            f"{int(row[groupby])} arr :\n{int(row[way])} {col}",
+            ha="center",
+            va="center",
+            fontsize=7,
+            linespacing=1.2,
+            # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
+        )
+    
+    # 绘制标注（区号）
+    # for idx, row in gdf_merged.iterrows():
+    #     x = row["geometry"].centroid.x
+    #     y = row["geometry"].centroid.y
+    #     plt.text(
+    #         x, y, 
+    #         str(row[groupby]), 
+    #         horizontalalignment='center',
+    #         fontsize=8,
+    #         fontweight='bold'
+    #     ) 
+    
+
+    # title
     if loc and year and title:    
-        title+= f"à {loc} ({year})"
-        ax.set_title(title, fontsize=16)
+        title += f" à {loc} ({str(year)})"
+        ax.set_title(title, fontsize=10)
     ax.axis("off")
-    if save and output_folder and filename:
+    
+    if save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
+        filename=f"{col}_{way}_{loc}{year}.jpg"
         outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
+        print(f"✅ [SAVE] map saved to {outpath_fig}!")
     plt.show()
     
-    return 
+    return
+
+
+
+
+def get_choropleth_map_ax(gdf_joined, gdf_map, groupby,
+            col, way,
+            loc, year, #title=None,
+            ax, vmin, vmax,
+            # save=False, output_folder=None,filename=None
+            ):
+    
+    # 1/3 ways 
+    ways =["count", "mean","sum"]
+    if way not in ways :
+        print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+    
+    # check numeric !
+    if way=="mean" or way=="sum":
+        print(f"[CHECK] needs numeric values for mean/sum! \n"
+              f" dtype :{gdf_joined[col].dtype}")
+        gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
+    if groupby and col and way:# get nb abs  
+        #as_index=False 会自动把 Series 转成 DataFrame
+        # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
+        groups=gdf_joined.groupby(groupby, as_index=False).agg(
+                **{way:(col, way)}
+                # way=(col, way) #简写无法动态取way的值 
+        )
+    
+    # print(groups)
+    print(f"[CHECK] groups' type: {type(groups)}\n"
+          f"groups cols:{groups.columns}")
+   
+    # merge to gdf_map: 把统计数字铁道map上
+    gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
+
+    #-------------------plot-------------------
+    # fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+
+
+    # 热度轴
+    gdf_merged.plot(
+        column=way, 
+        ax=ax, 
+        cmap="OrRd", 
+        vmin=vmin, 
+        vmax=vmax, 
+        legend=False,#小图不显示热度轴 
+        edgecolor="black",
+        linewidth=0.5
+        )
+    
+    #坐标与文字
+    for idx, row in gdf_merged.iterrows():
+        x = row.geometry.centroid.x
+        y = row.geometry.centroid.y
+        ax.text(
+            x, y,
+            f"{int(row[groupby])}arr:\n{int(row[way])}",
+            ha="center",
+            va="center",
+            fontsize=8,
+            linespacing=1.2,
+            # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
+        )
+
+    #小图不设立title
+    # if loc and year and title:    
+    if year:
+        title = f"{str(year)}"
+        ax.set_title(title, fontsize=10)
+
+    ax.axis("off")
+
+    # 小图不保存！ 
+    # if save and output_folder:
+    #     os.makedirs(output_folder, exist_ok=True)
+    #     filename=f"{col}_{way}_{loc}{year}.jpg"
+    #     outpath_fig=os.path.join(output_folder,filename)   
+    #     fig.savefig(outpath_fig, dpi=300)      
+    #     print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    # plt.show()
+    
+    return
+
+
+
+
+def layout_maps(dict_gdf_joined, gdf_map, loc,
+                col, way, groupby,suptitle,
+                save=False, output_folder=None):
+    import matplotlib as mpl
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+    years=list(dict_gdf_joined.keys())
+    # 统一热度轴：
+    vmin, vmax=0,0
+    for year, gdf_joined in dict_gdf_joined.items():
+        groups=gdf_joined.groupby(groupby, as_index=False).agg(
+            **{way:(col, way)}
+        )
+        # print(len(groups))
+        # print(groups.columns)
+        # print(groups)
+        
+        
+        vmin_current= groups[way].min()
+        if vmin> vmin_current:
+            vmin=vmin_current
+        vmax_current= groups[way].max()
+        if vmax < vmax_current:
+            vmax=vmax_current
+    print(f"[INFO] vmin: {vmin}; vmax: {vmax}")
+    # fig
+    fig, axes = plt.subplots(1, 2, figsize=(20, 10))
+    
+    i=0
+    for year, gdf_joined in dict_gdf_joined.items():
+        print(f"[INFO]{i}:{year}, len gdf : {len(gdf_joined)}")
+        
+        get_choropleth_map_ax(gdf_joined, gdf_map, groupby=groupby,
+            col=col, way=way,
+            loc=loc, year=year,
+            ax=axes[i], vmin=vmin, vmax=vmax
+        )
+        i+=1
+        
+    # 统一热度轴
+    
+    # sm = mpl.cm.ScalarMappable(cmap="OrRd", norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax))
+    # sm._A = []  # 必须加这一行才能生成 colorbar
+    # divider = make_axes_locatable(axes[-1])  # 绑定在右侧子图
+    # cax = divider.append_axes("right", size="1%", pad=0.01)
+    # cbar = fig.colorbar(sm, cax=cax)
+
+    suptitle+=f"entre {years[0]} et {years[1]} à {loc}"    
+    plt.suptitle(
+            suptitle,
+            fontsize=20,
+            fontweight="bold",
+            # y=0.98
+        )
+    
+    # sm = mpl.cm.ScalarMappable(
+    #     cmap="OrRd",
+    #     norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    # )
+    # sm._A = []
+    # cbar = fig.colorbar(
+    #     sm,
+    #     ax=axes,
+    #     fraction=0.035,
+    #     pad=0.03
+    # ) 
+    # cbar.set_label(f"{col} ({way})", fontsize=12)
+    # cbar.ax.tick_params(labelsize=10)
+
+    ## V0
+    sm = mpl.cm.ScalarMappable(cmap="OrRd", norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax))
+    sm._A = []  # 必须加这一行才能生成 colorbar
+    cbar = fig.colorbar(sm, ax=axes, 
+                        fraction=0.02, #colorbar 宽度
+                        pad=0.03 #colorbar 和子图的间距
+                        )
+    cbar.set_label(f"{col} ({way})", fontsize=12) # label 字体大小
+    cbar.ax.tick_params(labelsize=10) # 刻度字体大小
+    
+
+    
+    plt.tight_layout()    
+    
+    #save
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        filename=f"comparaison_{col}_{way}_{loc}{'-'.join(years)}.jpg"
+        outpath_fig=os.path.join(output_folder,filename)   
+        fig.savefig(outpath_fig, dpi=300)      
+        print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    plt.show()
+    
+
+    # plt.tight_layout(rect=[0, 0, 0.98, 0.95])
+    # plt.suptitle(f"Comparaison de {way} {col} entre {years[0]} et {years[1]} à {loc}", fontsize=16)
+    # plt.show()
+    
+    return
+
+
+    
 
 
 
@@ -177,51 +437,77 @@ import matplotlib.pyplot as plt
     
 #     return 
 
-def get_desc_map_html(gdf_pts, gdf_map, 
-                    pts_is_letf=True,
+def get_desc_map_html(gdf_joined, gdf_map,
+                    # pts_is_letf=True,
                     groupby=None,
-                    sum_on=None, count_on=None, mean_on=None, 
+                    # sum_on=None, count_on=None, mean_on=None,
+                    col=None, way=None,  
                     size_ratio=50,
                     save=False, output_folder=None, 
-                    filename="map_cercles_proportionnels.html"):
+                    ):
 
-    # aligne :
-    gdf_pts=gdf_pts.to_crs(gdf_map.crs)
-    print(f"[CHECK] pts and map in same crs {gdf_map.crs}!")
-    #EPSG:3857
+    # # aligne :
+    # gdf_pts=gdf_pts.to_crs(gdf_map.crs)
+    # print(f"[CHECK] pts and map in same crs {gdf_map.crs}!")
+    # #EPSG:3857
     
-    # join
-    if pts_is_letf:
-        gdf_joined=gdf.sjoin(gdf_pts,
-        		gdf_map, how='inner',predicate='intersects')
-    else:
-        gdf_joined=gdf.sjoin(gdf_map,
-                gdf_pts, how="inner", predicate='intersects')
+    # # join
+    # if pts_is_letf:
+    #     gdf_joined=gdf.sjoin(gdf_pts,
+    #     		gdf_map, how='inner',predicate='intersects')
+    # else:
+    #     gdf_joined=gdf.sjoin(gdf_map,
+    #             gdf_pts, how="inner", predicate='intersects')
+
     
-    # check numeric in mean +/ sum
-    for  num_col in [mean_on,sum_on]:
-        # if num_col and num_col in gdf_joined :
-        if num_col and num_col in gdf_joined and gdf_joined[num_col].notna().any():
-            print(f"[CHECK] NUMERIC values on mean_col/count_col :{gdf_joined[num_col].dtype}=> numeric!\n")   
-            gdf_joined[num_col]=pd.to_numeric(gdf_joined[num_col], errors='coerce')
+    # desc : 1/3 ways 
+    ways =["count", "mean","sum"]
+    if way not in ways :
+        print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+    
+    # check numeric !
+    if way=="mean" or way=="sum":
+        print(f"[CHECK] needs numeric values for mean/sum! \n"
+              f" dtype :{gdf_joined[col].dtype}")
+        gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
+    if groupby and col and way:# get nb abs  
+        #as_index=False 会自动把 Series 转成 DataFrame
+        # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
+        groups=gdf_joined.groupby(groupby, as_index=False).agg(
+                **{way:(col, way)}
+                # way=(col, way) #简写无法动态取way的值 
+        )
+        print(f"[CHECK] groups' type: {type(groups)}\n"
+            f"groups cols:{groups.columns}")
+    
+    # # check numeric in mean +/ sum
+    # for  num_col in [mean_on,sum_on]:
+    #     # if num_col and num_col in gdf_joined :
+    #     if num_col and num_col in gdf_joined and gdf_joined[num_col].notna().any():
+    #         print(f"[CHECK] NUMERIC values on mean_col/count_col :{gdf_joined[num_col].dtype}=> numeric!\n")   
+    #         gdf_joined[num_col]=pd.to_numeric(gdf_joined[num_col], errors='coerce')
         
     # desc :groupby==ZONE        
-    if count_on and groupby:# get nb abs  
-        groups=gdf_joined.groupby(groupby)[count_on].count()
-        groups.columns=[groupby, count_on]
+    # if count_on and groupby:# get nb abs  
+    #     groups=gdf_joined.groupby(groupby)[count_on].count()
+    #     groups.columns=[groupby, count_on]
         
-    elif mean_on and groupby:
-        groups=gdf_joined.groupby(groupby)[mean_on].mean()
-        groups.columns=[groupby, mean_on]
+    # elif mean_on and groupby:
+    #     groups=gdf_joined.groupby(groupby)[mean_on].mean()
+    #     groups.columns=[groupby, mean_on]
     
-    elif sum_on and groupby:
-        groups=gdf_joined.groupby(groupby)[sum_on].sum()
-        groups.columns=[groupby, sum_on]
+    # elif sum_on and groupby:
+    #     groups=gdf_joined.groupby(groupby)[sum_on].sum()
+    #     groups.columns=[groupby, sum_on]
     
-    val_col=groups.columns[1]
+    # val_col=groups.columns[1]
+    
+    
+    
+    
     
     # merge groups back to map by "groupby"
-    
     gdf_to_map=gdf_map.merge(groups,
             on=groupby, how='left')
     # display(gdf_to_map.head())
@@ -237,7 +523,7 @@ def get_desc_map_html(gdf_pts, gdf_map,
     for idx, row in gdf_to_map.iterrows():
         folium.CircleMarker(
             location=[row.geometry.centroid.y, row.geometry.centroid.x],
-            radius=row[val_col] / size_ratio,  # Ajustez le facteur de division selon vos besoins
+            radius=row[way] / size_ratio,  # Ajustez le facteur de division selon vos besoins
             color='blue',
             fill=True,
             fill_color='blue',
@@ -263,7 +549,7 @@ def get_desc_map_html(gdf_pts, gdf_map,
         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
         padding: 10px;">
         <b>Légende</b> <br>
-        {val_col}: <br>
+        {col} {way}: <br>
         {legend_circles}
         </div>
         """
@@ -272,6 +558,7 @@ def get_desc_map_html(gdf_pts, gdf_map,
         
     if save and output_folder:            
         os.makedirs(output_folder, exist_ok=True)
+        filename=f"proportional_map_on_{way}_{col}.html"
         outpath_html=os.path.join(output_folder, filename)
         m.save(outpath_html)
         print(f'✅ [SAVE] map of proportional cercles saved to {outpath_html}!')
