@@ -46,7 +46,7 @@ def unzip_csv_gz(folder='raw_data', output_folder='data'):
 ##==================================SPLIT============================================##
 
 def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85, 
-                        OUTPUT_FOLDER=None):
+                        output_folder=None):
         
     Q1=pd.read_csv(path_Q1)
     Q2=pd.read_csv(path_Q2)

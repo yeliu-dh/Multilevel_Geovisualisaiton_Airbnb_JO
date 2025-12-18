@@ -3,6 +3,7 @@ import geopandas as gpd
 import os, sys
 import matplotlib.pyplot as plt
 
+## 参数!=常量？
 
 def read_csv(csv_path):
     return pd.read_csv(csv_path)
@@ -29,9 +30,7 @@ def save_gdf(gdf, outpath_gdf):
 
 
 
-
-
-def df2gdf(df, crs="EPSG:4326",  save=False, OUTPUT_FOLDER=None, filename=None):
+def df2gdf(df, crs="EPSG:4326",  save=False, output_folder=None, filename=None):
     print(f"[INFO] len df: {len(df)}\n"
           f"default crs 'EPSG:4326'\n"
           f"ADD 'geometry' by latitude and longitude!\n")
@@ -49,9 +48,9 @@ def df2gdf(df, crs="EPSG:4326",  save=False, OUTPUT_FOLDER=None, filename=None):
     # display(gdf.head())
     
     # save
-    if save and OUTPUT_FOLDER and filename:
-        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-        outpath_shp=os.path.join(OUTPUT_FOLDER,filename)    
+    if save and output_folder and filename:
+        os.makedirs(output_folder, exist_ok=True)
+        outpath_shp=os.path.join(output_folder,filename)    
         save_gdf(gdf, outpath_shp)
 
     return gdf
@@ -64,16 +63,16 @@ def df2gdf(df, crs="EPSG:4326",  save=False, OUTPUT_FOLDER=None, filename=None):
 ##=========================listings+map===========================
 def locate_points(path_listings, path_map, CRS,  
                     save_gdf_joined=False,                     
-                    OUTPUT_FODLER=None,
+                    output_folder=None,
                     filename_gdf_joined=None):
-    if OUTPUT_FODLER:
-        os.makedirs(OUTPUT_FODLER, exist_ok=True)
+    if output_folder:
+        os.makedirs(output_folder, exist_ok=True)
         
     print("df_listings to gdf_listings by latitude and longitude!".center(100,"-"))        
     df=pd.read_csv(path_listings)
     
     gdf_listings=df2gdf(df=df, crs=CRS,
-        save=False, OUTPUT_FOLDER=OUTPUT_FODLER,
+        save=False, output_folder=output_folder,
         filename='')
     
     print("read gdf map".center(100,'-'))
@@ -83,6 +82,8 @@ def locate_points(path_listings, path_map, CRS,
     print("join gdf_listings and gdf".center(100,'-'))
     if gdf_listings.crs!=gdf_map.crs:
         print(f"[WARNING] {gdf_listings.crs}!={gdf_map.crs}")
+    
+    # make sure
     gdf_listings = gdf_listings.to_crs(gdf_map.crs)
     
     #join: 把每一个 Airbnb 房源点，和它“所在的地图区域（多边形）”连在一起。
@@ -95,7 +96,7 @@ def locate_points(path_listings, path_map, CRS,
     
     # save:
     if save_gdf_joined:
-        outpath_gdf_joined=os.path.join(OUTPUT_FODLER, filename_gdf_joined)
+        outpath_gdf_joined=os.path.join(output_folder, filename_gdf_joined)
         save_gdf(gdf=gdf_joined, outpath_gdf=outpath_gdf_joined)
         
     return gdf_joined
@@ -104,27 +105,9 @@ def locate_points(path_listings, path_map, CRS,
 
 
 
-
-
 def get_choropleth_map(gdf_joined, gdf_map, groupby="c_ar",
                               loc="paris", year="2024",title=None,
-                              save=False, OUTPUT_FOLDER=None,filename=None):
-    
-    # #aligne :确保两个 GeoDataFrame 使用完全一致的投影坐标系。
-    # gdf_listings = gdf_listings.to_crs(gdf_map.crs)
-    # print(f"[CHCEK] GDFs use the same crs {gdf_map.crs}!")
-
-    # #join :
-    # gdf_joined = gpd.sjoin(
-    #     gdf_listings,
-    #     gdf_map,
-    #     how="left",
-    #     predicate="within"
-    # )
-    
-    # gdf_joined在groupby之后geo消失，必须按照groupby col贴回map
-    # gdf_joined=read_gdf(path_gdf_joined)
-    # gdf_map=read_gdf(path_gdf_map)
+                              save=False, output_folder=None,filename=None):
 
     #count:
     # group = gdf_joined.groupby(groupby).size().sort_values(ascending=False)
@@ -154,16 +137,15 @@ def get_choropleth_map(gdf_joined, gdf_map, groupby="c_ar",
             horizontalalignment='center',
             fontsize=8,
             fontweight='bold'
-        )
-        
+        )        
         
     if loc and year and title:    
         title+= f"à {loc} ({year})"
         ax.set_title(title, fontsize=16)
     ax.axis("off")
-    if save and OUTPUT_FOLDER and filename:
-        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-        outpath_fig=os.path.join(OUTPUT_FOLDER,filename)   
+    if save and output_folder and filename:
+        os.makedirs(output_folder, exist_ok=True)
+        outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
     plt.show()
     
@@ -171,3 +153,195 @@ def get_choropleth_map(gdf_joined, gdf_map, groupby="c_ar",
 
 
 
+# MOT 
+
+list_jo =['olympic', 'jo', 'stade']
+list_geo=["close"]
+
+
+
+
+#=================================HTML MAP=====================================
+
+import pandas as pd
+import geopandas as gdf
+import os, sys, importlib, time
+import mapclassify#***
+import folium #***
+from folium import Map, CircleMarker
+import matplotlib.pyplot as plt
+
+
+# def plot_points_map(gdf_pts, gdf_map, 
+#                     save=False, OUTPUT_FOLDER=None,filename=None):
+    
+#     return 
+
+def get_desc_map_html(gdf_pts, gdf_map, 
+                    pts_is_letf=True,
+                    groupby=None,
+                    sum_on=None, count_on=None, mean_on=None, 
+                    size_ratio=50,
+                    save=False, output_folder=None, 
+                    filename="map_cercles_proportionnels.html"):
+
+    # aligne :
+    gdf_pts=gdf_pts.to_crs(gdf_map.crs)
+    print(f"[CHECK] pts and map in same crs {gdf_map.crs}!")
+    #EPSG:3857
+    
+    # join
+    if pts_is_letf:
+        gdf_joined=gdf.sjoin(gdf_pts,
+        		gdf_map, how='inner',predicate='intersects')
+    else:
+        gdf_joined=gdf.sjoin(gdf_map,
+                gdf_pts, how="inner", predicate='intersects')
+    
+    # check numeric in mean +/ sum
+    for  num_col in [mean_on,sum_on]:
+        # if num_col and num_col in gdf_joined :
+        if num_col and num_col in gdf_joined and gdf_joined[num_col].notna().any():
+            print(f"[CHECK] NUMERIC values on mean_col/count_col :{gdf_joined[num_col].dtype}=> numeric!\n")   
+            gdf_joined[num_col]=pd.to_numeric(gdf_joined[num_col], errors='coerce')
+        
+    # desc :groupby==ZONE        
+    if count_on and groupby:# get nb abs  
+        groups=gdf_joined.groupby(groupby)[count_on].count()
+        groups.columns=[groupby, count_on]
+        
+    elif mean_on and groupby:
+        groups=gdf_joined.groupby(groupby)[mean_on].mean()
+        groups.columns=[groupby, mean_on]
+    
+    elif sum_on and groupby:
+        groups=gdf_joined.groupby(groupby)[sum_on].sum()
+        groups.columns=[groupby, sum_on]
+    
+    val_col=groups.columns[1]
+    
+    # merge groups back to map by "groupby"
+    
+    gdf_to_map=gdf_map.merge(groups,
+            on=groupby, how='left')
+    # display(gdf_to_map.head())
+ 
+ 	#map it:
+	# Folium fonctionne mieux avec des coordonnées WGS84 (4326)
+    gdf_to_map = gdf_to_map.to_crs(epsg=4326)
+
+    #通过mean找到zone的中心点
+    m = folium.Map(location=[gdf_to_map.geometry.centroid.y.mean(),
+                        gdf_to_map.geometry.centroid.x.mean()], zoom_start=12)
+    
+    for idx, row in gdf_to_map.iterrows():
+        folium.CircleMarker(
+            location=[row.geometry.centroid.y, row.geometry.centroid.x],
+            radius=row[val_col] / size_ratio,  # Ajustez le facteur de division selon vos besoins
+            color='blue',
+            fill=True,
+            fill_color='blue',
+            fill_opacity=0.6,
+            popup=folium.Popup(f"{row[groupby]}<br> {row[groupby]}", parse_html=True)# title?
+        ).add_to(m)
+    
+    # legend
+    example_sizes = [100, 500, 1000]  #图例中点的大小
+    legend_circles = ""
+    for size in example_sizes:
+        radius = size / size_ratio # 要和map上的比例尺一致！
+        legend_circles += f"""
+        &nbsp; <svg width="{2*radius}" height="{2*radius}">
+            <circle cx="{radius}" cy="{radius}" r="{radius}" fill="blue" fill-opacity="0.6" stroke="blue"/>
+        </svg>&nbsp; {size}<br>
+        """
+
+    # Ajouter une légende
+    legend_html = f"""
+        <div style="position: fixed;
+        bottom: 50px; left: 50px; width: 170px; height: auto;
+        background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+        padding: 10px;">
+        <b>Légende</b> <br>
+        {val_col}: <br>
+        {legend_circles}
+        </div>
+        """
+    m.get_root().html.add_child(folium.Element(legend_html))    
+    display(m)
+        
+    if save and output_folder:            
+        os.makedirs(output_folder, exist_ok=True)
+        outpath_html=os.path.join(output_folder, filename)
+        m.save(outpath_html)
+        print(f'✅ [SAVE] map of proportional cercles saved to {outpath_html}!')
+  
+    return 
+
+
+def buffer_in(geometry, distance_x_meters):
+    # create a buffer around a pt!  
+    # return pt x, y, polygone
+    crs = geometry.crs
+    return geometry.to_crs(epsg=3857).buffer(distance_x_meters).to_crs(crs)
+
+
+def get_buffer_map_html(gdf_pts, gdf_map,
+                        filter_by_col=None, filter_by_value=None,
+                        pts_col=None, distance_x_meters=None,   
+                        save=False, output_folder=None, filename='map_buffer.html'):
+    # gdf_pts!=gdf_pts_filter by zone!
+    
+    # aligne :
+    gdf_pts=gdf_pts.to_crs(gdf_map.crs)
+    print(f"[CHECK] gdf_pts & gdf_map on the same CRS : {gdf_pts.crs}!")
+    
+    # sjoin first
+    gdf_joined=gdf.sjoin(gdf_pts,
+    		gdf_map, how='inner',predicate='intersects')
+
+    # then filter by zone : 
+    gdf_joined_filtered=gdf_joined.copy()
+
+    if filter_by_col and filter_by_value:
+        gdf_joined_filtered=gdf_joined_filtered[gdf_joined_filtered[filter_by_col]==filter_by_value]
+        print(f"[INFO] len gdf_joined_filtered :{len(gdf_joined_filtered)}\n"
+              f"cols :{gdf_joined_filtered.columns}")
+    else :
+        print(f'[INFO] no filteration applied on gdf_joined!')
+
+    # create buffer:
+    # 要先把pt列设为index！
+    areas=buffer_in(gdf_joined_filtered.set_index(pts_col).geometry, distance_x_meters=distance_x_meters)
+    
+    # series to gdf
+    gdf_areas = areas.to_frame().rename(columns={0:'geometry'})
+    
+    # 指明空间列！
+    gdf_areas=gdf.GeoDataFrame(gdf_areas, geometry=gdf_areas['geometry'])
+    m = gdf_areas.explore()
+    display(m)
+
+    # plt
+    # ax = gdf_areas.plot(figsize = (10, 10), color='white', edgecolor='black'
+    # # ax.set_xlabel('Coordonnée x')
+    # # ax.set_ylabel('Coordonnée y')
+    # ax.set_title(title)
+        
+    # # 悬停鼠标时显示idx文字
+    # for idx, row in gdf_areas.iterrows():
+    #     ax.annotate(text=idx, xy=row.geometry.centroid.coords[0], horizontalalignment='center', fontsize=10)
+        
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        outpath_html=os.path.join(output_folder, filename)
+        m.savesave(outpath_html)
+        print(f'✅ [SAVE] map with buffer saved to {outpath_html}!')
+         
+
+    return 
+    
+    
+    
+    
+    
