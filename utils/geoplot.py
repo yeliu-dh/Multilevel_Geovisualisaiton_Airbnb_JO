@@ -1,8 +1,8 @@
 import pandas as pd
 import geopandas as gpd
 import os, sys
-import matplotlib.pyplot as plt
 import math
+import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -125,7 +125,6 @@ def locate_points(path_listings, path_map, CRS,
 def get_pts_map(gdf_pts, gdf_map,title=None,
                 save=False,output_folder=None,):
     
-    
     fig, ax = plt.subplots(figsize=(16, 16))
 
     # Afficher les jeux de données sur la carte
@@ -146,34 +145,58 @@ def get_pts_map(gdf_pts, gdf_map,title=None,
     # Afficher la carte
     plt.show()
 
-
     return 
 
 
 
+## ============================density map==========================================
+
+def get_cmap(vmin, vmax):    
+    if vmin>=0:#均为正
+        cmap="OrRd"
+    elif vmax<0 :# 大部分为负，全用蓝色！
+        cmap= plt.cm.Blues_r 
+    else :# 有正有负，且vmax超过1
+        cmap='RdBu_r'
+    return cmap
 
 
-
-# ================================fixed map===================================
-
-def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
-            col, way,
-            loc, year, title=None,
-            # ax, vmin, vmax,
-            save=False, output_folder=None,filename=None
-            ):
+def add_cbar(vmin, vmax, 
+             fig, on_right=True, 
+             col=None, way=None):
+    cmap=get_cmap(vmin, vmax)
     
-    # 1/3 ways 
+    sm = mpl.cm.ScalarMappable(
+    cmap=cmap,
+    norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+        )
+    
+    sm._A = []
+    if on_right==True:    
+        cax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
+        # [left, bottom, width, height]
+    
+    else :
+        cax=fig.add_axes([0.08, 0.25, 0.02, 0.5])
+        
+    cbar = fig.colorbar(sm, cax=cax)
+    cbar.set_label(f"{col}({way})", fontsize=10)
+    cbar.ax.tick_params(labelsize=8)
+    # return #  条件赋值 / 间接赋值 / return 会将变量认为是局部变量
+
+def get_groups (gdf_joined, col, way, groupby):
+
+    ## 1/3 ways 
     ways =["count", "mean","sum"]
     if way not in ways :
         print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
     
-    # check numeric !
-    
+    ## check numeric
     if way=="mean" or way=="sum":
-        print(f"[CHECK] needs numeric values for mean/sum! \n"
-              f" dtype :{gdf_joined[col].dtype}")
+        # print(f"[CHECK] needs numeric values for mean/sum! \n"
+        #       f" dtype :{gdf_joined[col].dtype}")
         gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
 
     if groupby and col and way:# get nb abs  
         #as_index=False 会自动把 Series 转成 DataFrame
@@ -181,149 +204,279 @@ def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
         groups=gdf_joined.groupby(groupby, as_index=False).agg(
                 **{way:(col, way)}
                 # way=(col, way) #简写无法动态取way的值 
-        )
+        )       
+    vmin= groups[way].min()
+    vmax= groups[way].max()
+    return groups, vmin, vmax
+
+
+
+def get_choropleth_map(gdf_joined, 
+            gdf_map, 
+            col, way, groupby,
+            subtitle,
+            fig=None, ax=None, vmin=None, vmax=None,# optionel
+            save=False, loc=None, ym=None, 
+            output_folder=None,filename=None
+        ):
     
-    # print(groups)
-    print(f"choropleth map : groups cols:{groups.columns}")
-   
-    # merge to gdf_map: 把统计数字铁道map上
+    
+    # ##input :
+    # gdf_joined=gpd.read_file(path_gdf_joined)
+    # gdf_map=gpd.read_file(path_gdf_map)
+    
+    # agg
+    groups, vmin_current, vmax_current =get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
+    
+    # merge back to gdf_map
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
 
-    #-------------------plot-------------------
-    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    # 热度图：
+    #----------------------------plot-----------------------------
+    fontsize_text=5
+    if not ax or not fig:
+        # 单图:打开cbar，单独ax，取当前vmin，vmax
+        fontsize_text=8 
+        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+        vmin, vmax=vmin_current, vmax_current
+
+    ## color the map:
+    cmap=get_cmap(vmin, vmax)
+    
+    print(f"[CHECK] cmap {cmap} for vlaues btw {vmin}-{vmax}!")
+
     gdf_merged.plot(
         column=way,
         ax=ax,
-        legend=True,
-        cmap="OrRd",       # 红色系，表示“强度”
+        vmin=vmin,
+        vmax=vmax,
+        legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
+        cmap=cmap,       
         edgecolor="black",
         linewidth=0.5
-    )
+    ) 
     
-    # 坐标与文字： 
+    add_cbar(vmin=vmin, vmax=vmax, 
+             fig=fig, on_right=True, 
+             col=col, way=way)
+    
+    # 坐标与文字：
+      
     for idx, row in gdf_merged.iterrows():
         x = row.geometry.centroid.x
         y = row.geometry.centroid.y
         ax.text(
             x, y,
-            f"{int(row[groupby])} arr :\n{int(row[way])} {col}",
+            f"{int(row[groupby])} arr :\n{int(row[way])}",
             ha="center",
             va="center",
-            fontsize=7,
+            fontsize=fontsize_text,
             linespacing=1.2,
-            # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
         )
     
-    # title
-    if loc and year and title:    
-        title += f" à {loc} ({str(year)})"
-        ax.set_title(title, fontsize=10)
+    ax.set_title(subtitle, fontsize=10, pad=10)# pad btw title & ax
     ax.axis("off")
     
-    if save and output_folder:
+    
+    # 非子图，由outpath才保存
+    if not ax and save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
-        filename=f"{col}_{way}_{loc}{year}.jpg"
+        if not filename:        
+            filename=f"map_{col}_{way}_{loc}{ym}.jpg"
         outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
-        print(f"✅ [SAVE] map saved to {outpath_fig}!")
-    plt.show()
+        print(f"✔ [SAVE] choropleth map saved to {outpath_fig}!")
+        plt.show()
     
     return
 
 
 
 
-def get_choropleth_map_ax(gdf_joined, gdf_map,
-            col, way, groupby,
-            ym, #for title
-            ax, vmin, vmax
-            ):
-    
-    # 1/3 ways 
-    ways =["count", "mean","sum"]
-    if way not in ways :
-        print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
-    
-    # check numeric !
-    if way=="mean" or way=="sum":
-        print(f"[CHECK] needs numeric values for mean/sum! \n"
-              f" dtype :{gdf_joined[col].dtype}")
-        gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
 
-    if groupby and col and way: # get nb abs  
-        #as_index=False 会自动把 Series 转成 DataFrame
-        # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
-        groups=gdf_joined.groupby(groupby, as_index=False).agg(
-                **{way:(col, way)}
-                # way=(col, way) #简写无法动态取way的值 
-        )
-        print(f"choropleth_ax : groups cols:{groups.columns}\n")
+
+def get_gap_groups():
+    return 
+
+
+
+
+
+
+
+
+# # ================================fixed map===================================
+
+# def get_single_choropleth_map(gdf_joined, gdf_map, 
+#             col, way,groupby,
+#             title,loc, year,
+#             # ax, vmin, vmax,
+#             save=False, output_folder=None,filename=None
+#             ):
+    
+#     # 1/3 ways 
+#     ways =["count", "mean","sum"]
+#     if way not in ways :
+#         print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+    
+#     # check numeric !
+    
+#     if way=="mean" or way=="sum":
+#         print(f"[CHECK] needs numeric values for mean/sum! \n"
+#               f" dtype :{gdf_joined[col].dtype}")
+#         gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
+#     if groupby and col and way:# get nb abs  
+#         #as_index=False 会自动把 Series 转成 DataFrame
+#         # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
+#         groups=gdf_joined.groupby(groupby, as_index=False).agg(
+#                 **{way:(col, way)}
+#                 # way=(col, way) #简写无法动态取way的值 
+#         )
+    
+#     # print(groups)
+#     print(f"choropleth map : groups cols:{groups.columns}")
+   
+#     # merge to gdf_map: 把统计数字铁道map上
+#     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
+
+#     #-------------------plot-------------------
+#     fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+#     # 热度图：
+#     gdf_merged.plot(
+#         column=way,
+#         ax=ax,
+#         legend=True,
+#         cmap="OrRd",       # 红色系，表示“强度”
+#         edgecolor="black",
+#         linewidth=0.5
+#     )
+    
+#     # 坐标与文字： 
+#     for idx, row in gdf_merged.iterrows():
+#         x = row.geometry.centroid.x
+#         y = row.geometry.centroid.y
+#         ax.text(
+#             x, y,
+#             f"{int(row[groupby])} arr :\n{int(row[way])} {col}",
+#             ha="center",
+#             va="center",
+#             fontsize=7,
+#             linespacing=1.2,
+#             # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
+#         )
+    
+#     # title
+#     # if loc and year and title:    
+#     #     title += f" à {loc} ({str(year)})"
+#     ax.set_title(title, fontsize=10)
+#     ax.axis("off")
+    
+#     if save and output_folder:
+#         os.makedirs(output_folder, exist_ok=True)
+#         filename=f"{col}_{way}_{loc}{year}.jpg"
+#         outpath_fig=os.path.join(output_folder,filename)   
+#         fig.savefig(outpath_fig, dpi=300)      
+#         print(f"✅ [SAVE] map saved to {outpath_fig}!")
+#     plt.show()
+    
+#     return
+
+
+
+
+# def get_choropleth_map_ax(gdf_joined, gdf_map,
+#             col, way, groupby,
+#             ym, #for title
+#             ax, vmin, vmax
+#             ):
+    
+#     # 1/3 ways 
+#     ways =["count", "mean","sum"]
+#     if way not in ways :
+#         print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+    
+#     # check numeric !
+#     if way=="mean" or way=="sum":
+#         print(f"[CHECK] needs numeric values for mean/sum! \n"
+#               f" dtype :{gdf_joined[col].dtype}")
+#         gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
+#     if groupby and col and way: # get nb abs  
+#         #as_index=False 会自动把 Series 转成 DataFrame
+#         # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
+#         groups=gdf_joined.groupby(groupby, as_index=False).agg(
+#                 **{way:(col, way)}
+#                 # way=(col, way) #简写无法动态取way的值 
+#         )
+#         print(f"choropleth_ax : groups cols:{groups.columns}\n")
 
    
-    # merge to gdf_map: 把统计数字铁道map上
-    gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
+#     # merge to gdf_map: 把统计数字铁道map上
+#     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
 
-    #-------------------plot-------------------
-    # fig, ax = plt.subplots(1, 1, figsize=(8, 6))#子图大小格式由ax输入
+#     #-------------------plot-------------------
+#     # fig, ax = plt.subplots(1, 1, figsize=(8, 6))#子图大小格式由ax输入
     
-    # 热度轴
-    gdf_merged.plot(
-        column=way, 
-        ax=ax, 
-        cmap="OrRd", 
-        vmin=vmin, 
-        vmax=vmax, 
-        legend=False,#小图不显示热度轴 
-        edgecolor="black",
-        linewidth=0.5
-        )
+#     # 热度轴
+#     gdf_merged.plot(
+#         column=way, 
+#         ax=ax, 
+#         cmap="OrRd", 
+#         vmin=vmin, 
+#         vmax=vmax, 
+#         legend=False,#小图不显示热度轴 
+#         edgecolor="black",
+#         linewidth=0.5
+#         )
     
-    #坐标与文字
-    for idx, row in gdf_merged.iterrows():
-        x = row.geometry.centroid.x
-        y = row.geometry.centroid.y
-        ax.text(
-            x, y,
-            f"{int(row[groupby])}arr:\n{int(row[way])}",
-            ha="center",
-            va="center",
-            fontsize=6,
-            linespacing=1.2,
-            # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
-        )
+#     #坐标与文字
+#     for idx, row in gdf_merged.iterrows():
+#         x = row.geometry.centroid.x
+#         y = row.geometry.centroid.y
+#         ax.text(
+#             x, y,
+#             f"{int(row[groupby])}arr:\n{int(row[way])}",
+#             ha="center",
+#             va="center",
+#             fontsize=6,
+#             linespacing=1.2,
+#             # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
+#         )
         
-    # 小图标题:
-    if ym:
-        title = f"{str(ym)}"
-        ax.set_title(title, fontsize=10)
+#     # 小图标题:
+#     if ym:
+#         title = f"{str(ym)}"
+#         ax.set_title(title, fontsize=10)
 
-    ax.axis("off")
+#     ax.axis("off")
     
-    return
+#     return
 
 
 
 
-def layout_comparison_maps(dict_gdf_joined, gdf_map,
+
+
+
+
+
+
+def layout_comparison_indep(dict_gdf_joined, gdf_map,
                 col, way, groupby,
-                suptitle, loc,# for filename
+                suptitle, loc, # for filename
                 n_axes, n_cols=3,#每行最多几张（列）
                 save=False, output_folder=None, filename=None):
     
     # vmin & vmax
     vmin, vmax=0,0
     for ym, gdf_joined in dict_gdf_joined.items():
-        groups=gdf_joined.groupby(groupby, as_index=False).agg(
-            **{way:(col, way)}
-        )        
-        vmin_current= groups[way].min()
+        groups, vmin_current, vmax_current=get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
         if vmin> vmin_current:
             vmin=vmin_current
         vmax_current= groups[way].max()
         if vmax < vmax_current:
             vmax=vmax_current
-    print(f"[INFO] vmin: {vmin}; vmax: {vmax}")
+    print(f"[INFO] vmin-vmax: {vmin}-{vmax}!")
     
     
     # axes
@@ -339,30 +492,40 @@ def layout_comparison_maps(dict_gdf_joined, gdf_map,
     # plot
     i=0
     for ym, gdf_joined in dict_gdf_joined.items():
-        print(f"[INFO]{i}:{ym}, len gdf : {len(gdf_joined)}")
-        get_choropleth_map_ax(gdf_joined, gdf_map, 
+        get_choropleth_map(gdf_joined=gdf_joined, 
+            gdf_map=gdf_map, 
             col=col, way=way, groupby=groupby,
-            ym=ym,
-            ax=axes[i], vmin=vmin, vmax=vmax
+            subtitle=ym,
+            fig=fig, ax=axes[i], vmin=vmin, vmax=vmax,
+            save=False, loc=loc, ym=ym, 
+            output_folder=None,filename=None
         )
+        # get_choropleth_map(gdf_joined, gdf_map, 
+        #     col=col, way=way, groupby=groupby,
+        #     ym=ym,
+        #     ax=axes[i], vmin=vmin, vmax=vmax
+        # )
         i+=1
         
     #shut down
     for j in range(i, len(axes)):
          axes[j].axis("off")
+                 
+    # add cbar
+    add_cbar(vmin, vmax, 
+             fig, on_right=True, 
+             col=col, way=way)        
 
-        
-    # same cbar
-    sm = mpl.cm.ScalarMappable(
-    cmap="OrRd",
-        norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    )
-    sm._A = []
+    # sm = mpl.cm.ScalarMappable(
+    # cmap="OrRd",
+    #     norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    # )
+    # sm._A = []
 
-    fig.subplots_adjust(right=0.88)
-    cax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
-    cbar = fig.colorbar(sm, cax=cax)
-    cbar.set_label(f"{col} ({way})", fontsize=6)
+    # fig.subplots_adjust(right=0.88)
+    # cax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
+    # cbar = fig.colorbar(sm, cax=cax)
+    # cbar.set_label(f"{col} ({way})", fontsize=6)
 
     # 大标题：
     plt.suptitle(
@@ -379,14 +542,13 @@ def layout_comparison_maps(dict_gdf_joined, gdf_map,
     if save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
         if not filename:
-            filename=f"comparaison_{col}_{way}_{loc}-{'-'.join(dict_gdf_joined.keys())}.jpg"
-
+            filename=f"indep_comparaison_{col}_{way}_{loc}-{'-'.join(dict_gdf_joined.keys())}.jpg"
         outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
         print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    
     plt.show()
     
-
     return
 
 
