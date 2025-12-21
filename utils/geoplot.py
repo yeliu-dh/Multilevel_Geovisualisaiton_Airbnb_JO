@@ -154,7 +154,7 @@ def get_pts_map(gdf_pts, gdf_map,title=None,
 def get_cmap(vmin, vmax):    
     if vmin>=0:#均为正
         cmap="OrRd"
-    elif vmax<0 :# 大部分为负，全用蓝色！
+    elif vmax<1 :# 大部分为负，全用蓝色！
         cmap= plt.cm.Blues_r 
     else :# 有正有负，且vmax超过1
         cmap='RdBu_r'
@@ -165,6 +165,7 @@ def add_cbar(vmin, vmax,
              fig, on_right=True, 
              col=None, way=None):
     cmap=get_cmap(vmin, vmax)
+    print(f"[CHECK] {vmin:.2f}-{vmax:.2f}=> cmap {cmap}")
     
     sm = mpl.cm.ScalarMappable(
     cmap=cmap,
@@ -183,6 +184,12 @@ def add_cbar(vmin, vmax,
     cbar.set_label(f"{col}({way})", fontsize=10)
     cbar.ax.tick_params(labelsize=8)
     # return #  条件赋值 / 间接赋值 / return 会将变量认为是局部变量
+
+
+
+
+
+
 
 def get_groups (gdf_joined, col, way, groupby):
 
@@ -226,7 +233,7 @@ def get_choropleth_map(gdf_joined,
             gdf_map, 
             col, way, groupby,
             subtitle,
-            fig=None, ax=None, vmin=None, vmax=None,# oblig for subplot
+            fig=None, subax=None, vmin=None, vmax=None,# oblig for subplot
             save=False, loc=None, ym=None, 
             output_folder=None,filename=None
         ):
@@ -243,17 +250,20 @@ def get_choropleth_map(gdf_joined,
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
 
     #----------------------------plot-----------------------------
-    fontsize_text=5
-    if not ax or not fig:
+    if not subax: 
         # 单图:打开cbar，单独ax，取当前vmin，vmax
         fontsize_text=8 
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
         vmin, vmax=vmin_current, vmax_current
+    else :
+        #外部大图
+        fontsize_text=5
+        ax=subax
 
+        
     ## color the map:
     cmap=get_cmap(vmin, vmax)
-    
-    print(f"[CHECK] cmap {cmap} for vlaues btw {vmin}-{vmax}!")
+    # print(f"[CHECK] cmap {cmap} for vlaues btw {vmin}-{vmax}!")
 
     gdf_merged.plot(
         column=way,
@@ -266,12 +276,13 @@ def get_choropleth_map(gdf_joined,
         linewidth=0.5
     ) 
     
-    add_cbar(vmin=vmin, vmax=vmax, 
+    if not subax: 
+        add_cbar(vmin=vmin, vmax=vmax, 
              fig=fig, on_right=True, 
              col=col, way=way)
     
+    
     # 坐标与文字：
-      
     for idx, row in gdf_merged.iterrows():
         x = row.geometry.centroid.x
         y = row.geometry.centroid.y
@@ -318,7 +329,7 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
         vmax_current= groups[way].max()
         if vmax < vmax_current:
             vmax=vmax_current
-    print(f"[INFO] vmin-vmax: {vmin}-{vmax}!")
+    # print(f"[INFO] vmin-vmax: {vmin}-{vmax}!")
     
     
     # axes
@@ -329,7 +340,7 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
         figsize=(6* n_cols, 4 * n_rows)
     )
     axes = axes.flatten()
-    print (f"[INFO] figure layout: {n_rows} rows x {n_cols} cols\n")
+    print (f"[INFO] compa indep layout: {n_rows} rows x {n_cols} cols\n")
 
     # plot
     i=0
@@ -338,7 +349,7 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
             gdf_map=gdf_map, 
             col=col, way=way, groupby=groupby,
             subtitle=ym,
-            fig=fig, ax=axes[i], vmin=vmin, vmax=vmax,
+            fig=fig, subax=axes[i], vmin=vmin, vmax=vmax,
             save=False, loc=loc, ym=ym, 
             output_folder=None,filename=None
         )
@@ -377,6 +388,10 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
     return
 
 
+
+
+###===================================GAP========================================
+
 def get_groups_gap(dict_gdf_joined, gap_between,
                       col, way, groupby):
     
@@ -397,8 +412,6 @@ def get_groups_gap(dict_gdf_joined, gap_between,
 
     return df_gap, vmin_gap_current, vmax_gap_current
 
-
-
     
     
 def get_choropleth_map_gap(dict_gdf_joined, 
@@ -406,48 +419,34 @@ def get_choropleth_map_gap(dict_gdf_joined,
             gdf_map, 
             col, way, groupby,
             subtitle,
-            fig=None, ax=None, vmin=None, vmax=None,# optionel
-            save=False, loc=None, ym=None, 
+            fig=None, subax=None, vmin=None, vmax=None,# optional for single map
+            save=False, loc=None, ym=None, # for filename
             output_folder=None,filename=None
         ):    
 
     df_gap, vmin_gap_current, vmax_gap_current= get_groups_gap(dict_gdf_joined, gap_between,
                       col=col, way=way, groupby=groupby) 
     
-    # dict_gdf_gap={
-    #     ym: dict_gdf_joined[ym]
-    #     for ym in gap_between
-    # }
-    # groups_for_gap=[]
-    # for ym, gdf_joined in dict_gdf_gap.items():
-    #     groups, vmin_current, vmax_current= get_groups(gdf_joined, col=col, way=way, groupby=groupby)
-    #     groups_for_gap.append(groups)               
-        
-    # df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
-    # df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
-    
-    # vmin_current=df_gap['gap'].min()
-    # vmax_current=df_gap['gap'].max()
-
-    print(f"[CHECK] df gap columns :{df_gap.columns}!\n"
-          f"vmin: {vmin_gap_current}, vmax:{vmax_gap_current}!")
-    
-    
     # merge back to map:
     gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
 
+
     #----------------------------plot-----------------------------
-    fontsize_text=5
-    
-    if not ax or not fig:
-        # 单图:打开cbar，单独ax，取当前vmin，vmax(无外部输入)
+
+    if not subax:
         fontsize_text=8 
+        # 单图:打开cbar，单独ax，取当前vmin，vmax(无外部输入)
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
         vmin, vmax=vmin_gap_current, vmax_gap_current
 
+    else : 
+        fontsize_text=5
+        ax=subax
+
+
     ## color the map:
     cmap=get_cmap(vmin, vmax)
-    print(f"[CHECK] cmap '{cmap}' for vlaues btw {vmin}-{vmax}!")
+    # print(f"[CHECK] cmap '{cmap}' for vlaues btw {vmin}-{vmax}!")
 
     gdf_merged.plot(
         column='gap',#*
@@ -460,12 +459,12 @@ def get_choropleth_map_gap(dict_gdf_joined,
         linewidth=0.5
     ) 
     
-    add_cbar(vmin=vmin, vmax=vmax, 
-             fig=fig, on_right=True, 
-             col=col, way=way)
+    if not subax:# 单图则画cbar 
+        add_cbar(vmin=vmin, vmax=vmax, 
+                fig=fig, on_right=True, 
+                col=col, way=way)
     
     # 坐标与文字：
-      
     for idx, row in gdf_merged.iterrows():
         x = row.geometry.centroid.x
         y = row.geometry.centroid.y
@@ -480,16 +479,16 @@ def get_choropleth_map_gap(dict_gdf_joined,
     
     ax.set_title(subtitle, fontsize=10, pad=10)# pad btw title & ax
     ax.axis("off")
-    
+
     
     # 非子图，由outpath才保存
-    if not ax and save and output_folder:
+    if not subax and save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
         if not filename:        
-            filename=f"map_{col}_{way}_{loc}{ym}.jpg"
+            filename=f"gap_map_{col}_{way}_{loc}{'-'.join(gap_between)}.jpg"
         outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
-        print(f"✔ [SAVE] choropleth map saved to {outpath_fig}!")
+        print(f"✔ [SAVE]  choropleth gap map saved to {outpath_fig}!")
         plt.show()
     
     return
@@ -720,7 +719,7 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
     ## ------------------------------vmin vmax-----------------------------------
     # key  
     groups_density, vmin_density, vmax_density = get_groups(gdf_joined=dict_gdf_joined[ym_key],
-            col=col, way=way, groupby=groupby, minmax_by=way)
+            col=col, way=way, groupby=groupby)
     
     # ref        
     ym_refs=[i for i in dict_gdf_joined.keys() if i !=ym_key]    
@@ -735,37 +734,8 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
         if vmax_gap < vmax_gap_current:
             vmax_gap=vmax_gap_current
                    
-        
-        # dict_gdf_gap={
-        #     ym: dict_gdf_joined[ym]
-        #     for ym in [ym_key,ym_ref]# ym_key放前！！
-        # }
-        # groups_for_gap=[]
-        # for ym, gdf_joined in dict_gdf_gap.items():  
-        #     groups, vmin_current, vmax_current= get_groups(gdf_joined, col=col, way=way, groupby=groupby, 
-        #                                                minmax_by="gap")#*
-        #     groups_for_gap.append(groups)    
-        #     df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
-        #     df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
-            
-        #     vmin_gap_current=df_gap['gap'].min()
-        #     vmax_gap_current=df_gap['gap'].max()
-            
-    
-            
-        #     if groupby and col and way:
-        #         groups=gdf_joined.groupby(groupby, as_index=False).agg(
-        #                 **{way:(col, way)}
-        #         )# => df
-        #         print(f"layout gap_map : {ym} groups cols:{groups.columns}\n")
-            
-        #     groups_for_gap.append(groups)
-        # df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
-        # df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
-        
-       
-    print(f"[INFO] vmin_density:{vmin_density}, vmax_density:{vmax_density} ")
-    print(f"[INFO] vmin_gap:{vmin_gap}, vmax_gap:{vmax_gap}!")
+    # print(f"[INFO] vmin_density:{vmin_density}, vmax_density:{vmax_density} ")
+    # print(f"[INFO]OVERALL vmin_gap :{vmin_gap}, OVERALL vmax_gap:{vmax_gap}!\n")
                 
     
    
@@ -778,50 +748,34 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
         figsize=(10* n_cols, 8* n_rows)
     )
     axes = axes.flatten()
-    print (f"[INFO] figure layout: {n_rows} rows x {n_cols} cols\n")
+    print (f"[INFO] compa gap layout: {n_rows} rows x {n_cols} cols\n")
 
     
     ## -----------------------------plot--------------------------------
     i=0
     for ym, gdf_joined in dict_gdf_joined.items():
-        if ym ==ym_key:#中间正常显示值
-            print(f"[INFO] event period {i}:{ym}, len gdf : {len(gdf_joined)}")
-            # get_choropleth_map_ax(gdf_joined=gdf_joined, 
-            #             gdf_map=gdf_map,
-            #             col=col, way=way, groupby=groupby,
-            #             ym=ym,
-            #             ax=axes[i], vmin=vmin_density, vmax=vmax_density
-            #             )  
+        if ym ==ym_key:#中间正常显示值 
             get_choropleth_map(gdf_joined=gdf_joined, 
                 gdf_map=gdf_map, 
                 col=col, way=way, groupby=groupby,
                 subtitle=ym,
-                fig=fig, ax=axes[i], vmin=vmin_density, vmax=vmax_density,# oblig for subplot
+                fig=fig, subax=axes[i], vmin=vmin_density, vmax=vmax_density,# oblig for subplot
                 save=False, loc=loc, ym=ym, 
                 output_folder=None,filename=None
             )      
         
         else : #参照组显示gap             
-            gap_between=[ym_key, ym]#key放前面,x的位置!
-            # gap_between_sorted=sorted(gap_between, key= lambda x : int(x), reverse=False)
-            
-            print(f"[INFO] gap between :{gap_between[1]}-{gap_between[0]}")
-            # get_gap_choropleth_ax(dict_gdf_joined, 
-            #         gap_between=gap_between,
-            #         gdf_map=gdf_map,
-            #         col=col, way=way, groupby=groupby, 
-            #         ax=axes[i], vmin=vmin_gap, vmax=vmax_gap,
-            #         title=f"{ym} comparé au {ym_key}")     
+            gap_between=[ym_key, ym]#key放前面,x的位置!                     
             get_choropleth_map_gap(dict_gdf_joined, 
                     gap_between=gap_between,
                     gdf_map=gdf_map, 
                     col=col, way=way, groupby=groupby,
                     subtitle=f"{ym} comparé au {ym_key}",
-                    fig=fig, ax=axes[i], vmin=vmin, vmax=vmax,# optionel
+                    fig=fig, subax=axes[i], 
+                    vmin=vmin_gap, vmax=vmax_gap,# optionel
                     save=False, loc=loc, ym=ym, 
                     output_folder=None,filename=None
-                )     
-                   
+                )                    
         i+=1
     
     # shutdown else
@@ -831,62 +785,16 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
     
     #--------------------------------cbar---------------------------------#
     
-    # 已经在_ax中给map画了在vmin， vmax范围内的颜色
+    # # 已经在_ax中给map画了在vmin， vmax范围内的color
+    ## 左边 cbar_gap
+    add_cbar(vmin=vmin_gap, vmax=vmax_gap, 
+             fig=fig, on_right=False, 
+             col=col, way='gap')
     
-    
-    # 创建 gap colorbar（左边，覆盖 ax2 和 ax3）
-    sm_gap = mpl.cm.ScalarMappable(cmap='RdBu_r', norm=mpl.colors.Normalize(vmin=vmin_gap, vmax=vmax_gap))
-    sm_gap._A = []  # 必须赋值空数组，matplotlib hack
-    # 手动创建 axes 在 figure 左边
-    cax_gap = fig.add_axes([0.08, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
-    cbar_gap = fig.colorbar(sm_gap, cax=cax_gap, orientation='vertical')
-    cbar_gap.set_label(f"Ecart de {col} ({way})")
-    cbar_gap.ax.yaxis.set_label_position('left')  # label 放左边
-    cbar_gap.ax.yaxis.tick_left()                # 刻度放左边
-
-
-
-
-    # 创建 density colorbar（右边）
-    sm_density = mpl.cm.ScalarMappable(cmap='OrRd', norm=mpl.colors.Normalize(vmin=vmin_density, vmax=vmax_density))
-    sm_density._A = []
-    # 手动创建 axes 在 figure 右边
-    cax_density = fig.add_axes([0.90, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
-    cbar_density = fig.colorbar(sm_density, cax=cax_density, orientation='vertical')
-    cbar_density.set_label(f"{col} ({way})")
-
-
-
-
-    # # show cbar
-    # sm_density = mpl.cm.ScalarMappable(cmap='OrRd', norm=mpl.colors.Normalize(vmin=vmax_density, vmax=vmax_density))
-    # sm_density._A = []
-    # cbar_density = fig.colorbar(sm_density, ax=ax1, orientation='vertical', fraction=0.05, pad=0.02)
-    # cbar_density.set_label(f"{col} ({way})")
-
-
-    # # 创建 gap colorbar（左边，覆盖 ax2 和 ax3）
-    # sm_gap = mpl.cm.ScalarMappable(cmap='RdBu_r', norm=mpl.colors.Normalize(vmin=vmin_gap, vmax=vmax_gap))
-    # sm_gap._A = []
-    # cbar_gap = fig.colorbar(sm_gap, ax=[ax2, ax3], orientation='vertical', fraction=0.05, pad=0.02)
-    # cbar_gap.set_label(f"Ecart de {col} ({way})")
-    # cbar_gap.ax.yaxis.set_label_position('left')  # label 放左边
-    # cbar_gap.ax.yaxis.tick_left()                # 刻度放左边
-
-    
-    # ## same cbar：
-    # sm = mpl.cm.ScalarMappable(
-    # cmap="OrRd",
-    #     norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    # )
-    # sm._A = []
-
-    # fig.subplots_adjust(right=0.88)
-    # cax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
-    # cbar = fig.colorbar(sm, cax=cax)
-    # cbar.set_label(f"{col} ({way})", fontsize=12)
-
-    
+    # 右边cbar_density
+    add_cbar(vmin=vmin_density, vmax=vmax_density, 
+             fig=fig, on_right=True, 
+             col=col, way=way)   
     
     
     # suptitle：
@@ -896,18 +804,17 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
             fontweight="bold",
             # y=0.98
         )
-    
-    
-    
+
     
     # no layout tight!!!!!
+
     ## save
     if save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
         filename=f"gap_comparaison_{col}_{way}_{loc}{'-'.join(dict_gdf_joined.keys())}.jpg"
         outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
-        print(f"✅ [SAVE] map saved to {outpath_fig}!")
+        print(f"✅ [SAVE] comparasion gap map saved to {outpath_fig}!")
     plt.show()
        
     
