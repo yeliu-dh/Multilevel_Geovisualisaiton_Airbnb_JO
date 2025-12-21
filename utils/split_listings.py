@@ -44,8 +44,10 @@ def unzip_csv_gz(folder='raw_data', output_folder='data'):
 ##==================================SPLIT============================================##
 
 def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85, 
-                        output_folder=None):
-        
+                        output_folder=None, filename=None):
+    # return dfQ2_split
+    
+      
     Q1=pd.read_csv(path_Q1)
     Q2=pd.read_csv(path_Q2)
     
@@ -93,7 +95,7 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     # mtd：根据host_since 细分new和reactive：纯向量操作（快十几倍，不需要 apply），同下效果。
     mask = (
         (df['status'] == 'reactive_host') &
-        (df['host_since'].between(f'{year}-01-01', f'{year}-06-30'))
+        (df['host_since'].between(f'{year}-01-01', f'{year}-06-30'))# faut int ici!!!
     )
     df.loc[mask, 'status'] = 'new_host'
    
@@ -225,7 +227,9 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     print(f"[RUNTIME] done in {end_time-start_time:.2f} sec!")
     
     os.makedirs(output_folder, exist_ok=True)
-    outpath_df=os.path.join(output_folder, os.path.basename(path_Q2).replace('.csv', '_split.csv'))
+    if filename ==None:
+        filename=os.path.basename(path_Q2).replace('.csv', '_split.csv')
+    outpath_df=os.path.join(output_folder,filename)
     dfQ2.to_csv(outpath_df,index=False)
     
     print(f"✅[SAVE] dfQ2 split saved to {outpath_df}!")

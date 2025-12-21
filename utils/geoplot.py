@@ -102,19 +102,6 @@ def locate_points(path_listings, path_map, CRS,
         
     return gdf_joined
 
-
-
-
-
- # val_col=groups.columns[1]
-    
-    # old count:
-    # group = gdf_joined.groupby(groupby).size().reset_index(name="count")
-
-# if num_col and num_col in gdf_joined and gdf_joined[num_col].notna().any():
-        #     print(f"[CHECK] NUMERIC values on mean_col/count_col :{gdf_joined[num_col].dtype}=> numeric!\n")   
-        #     gdf_joined[num_col]=pd.to_numeric(gdf_joined[num_col], errors='coerce')
-    
     
     
     
@@ -213,8 +200,6 @@ def get_groups (gdf_joined, col, way, groupby):
                 # way=(col, way) #简写无法动态取way的值 
         )
          
-    # if minmax_by==None:
-    #     minmax_by=way#默认为way
         
     vmin= groups[way].min()
     vmax= groups[way].max()
@@ -497,211 +482,6 @@ def get_choropleth_map_gap(dict_gdf_joined,
 
 
 
-# ##===================================GAP COMPARISON=================================##
-
-# def get_single_gap_choropleth(dict_gdf_joined, gap_between: list,
-#                        gdf_map,
-#                        col, way, groupby, 
-#                        title, loc, save=False, output_folder=None):
-#     """
-#     Docstring for get_gap_choropleth
-    
-#     :param dict_gdf_joined: Description
-#     :param gap_between: 2 index in dict
-#     """
-#     # 2 ax!!!
-#     # gdf1=dict_gdf_joined[gap_between[0]]
-#     # gdf2=dict_gdf_joined[gap_between[1]]
-#     # inupt 
-    
-#     # gdfs=[dict_gdf_joined[gap_between[0]], dict_gdf_joined[gap_between[1]]]
-#     dict_gdf_gap={
-#         ym: dict_gdf_joined[ym]
-#         for ym in gap_between
-#     }
-        
-#     groups_for_gap=[]
-#     for ym, gdf_joined in dict_gdf_gap.items():  
-#         # 1/3 ways 
-#         ways =["count", "mean","sum"]
-#         if way not in ways :
-#             print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
-        
-#         # check numeric !
-#         if way=="mean" or way=="sum":
-#             print(f"[CHECK] needs numeric values for mean/sum! \n"
-#                 f" dtype :{gdf_joined[col].dtype}")
-#             gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
-
-
-#         if groupby and col and way:
-#             groups=gdf_joined.groupby(groupby, as_index=False).agg(
-#                     **{way:(col, way)}
-#             )# => df
-#             # groups.columns=[groupby, f"{way}"]
-#             print(f"{ym} gap map: groups cols:{groups.columns}\n")
-        
-#         groups_for_gap.append(groups)
-#     df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
-#     df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
-#     print(f"[CHECK] df gap columns :{df_gap.columns}!")
-#     # display(df_gap)
-    
-#     # merge back to map:
-#     gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
-#     # print(gdf_merged.columns)
-#     # print(gdf_merged[[groupby,f'{way}_x',f'{way}_y','gap']])
-     
-#     #-------------------plot-------------------
-#     fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-   
-#     ## 热度轴：    
-#     # 有负值的时候才用蓝色！
-#     if gdf_merged['gap'].min()>0:
-#         cmap="OrRd"
-#     else :
-#         cmap='RdBu_r'#'coolwarm',  
-        
-#     gdf_merged.plot(
-#         column='gap',# 之前按照way画，
-#         ax=ax,
-#         legend=True,
-#         cmap=cmap,
-#         edgecolor="black",
-#         linewidth=0.5
-#     )
-    
-#     # 坐标与文字： 
-#     for idx, row in gdf_merged.iterrows():
-#         x = row.geometry.centroid.x
-#         y = row.geometry.centroid.y
-#         ax.text(
-#             x, y,
-#             f"{int(row[groupby])} arr :\n{'+' if int(row['gap'])>=0 else '-'}{int(row['gap'])} {col}",
-#             ha="center",
-#             va="center",
-#             fontsize=6,
-#             linespacing=1.2,
-#             # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
-#         )
-    
-#     # title
-    
-#     ax.set_title(title, fontsize=10)
-#     ax.axis("off")
-    
-#     if save and output_folder:
-#         os.makedirs(output_folder, exist_ok=True)
-#         filename=f"gap_{col}_{way}_{loc}{'-'.join(gap_between)}.jpg"
-#         outpath_fig=os.path.join(output_folder,filename)   
-#         fig.savefig(outpath_fig, dpi=300)      
-#         print(f"✅ [SAVE] map saved to {outpath_fig}!")
-#     plt.show()
-   
-   
-#     return 
-
-
-
-# def get_gap_choropleth_ax(dict_gdf_joined, gap_between: list,
-#                        gdf_map,
-#                        col, way, groupby, 
-#                        ax, vmin, vmax, title):
-#     """
-#     Docstring for get_gap_choropleth
-    
-#     :param dict_gdf_joined: Description
-#     :param gap_between: 2 index in dict
-#     """
-#     # input
-#     dict_gdf_gap={
-#         ym: dict_gdf_joined[ym]
-#         for ym in gap_between
-#     }
-    
-#     # gdfs=[dict_gdf_joined[gap_between[0]], dict_gdf_joined[gap_between[1]]]
-    
-#     groups_for_gap=[]
-#     for ym, gdf_joined in dict_gdf_gap.items():  
-#         # 1/3 ways 
-#         ways =["count", "mean","sum"]
-#         if way not in ways :
-#             print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
-        
-#         # check numeric !
-#         if way=="mean" or way=="sum":
-#             print(f"[CHECK] needs numeric values for mean/sum! \n"
-#                 f" dtype :{gdf_joined[col].dtype}")
-#             gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
-
-#         if groupby and col and way:
-#             groups=gdf_joined.groupby(groupby, as_index=False).agg(
-#                     **{way:(col, way)}
-#             )# => df
-#             groups.columns=[groupby, f"{way}"]
-            
-#             print(f"{ym} gap_map_ax: groups cols:{groups.columns}")
-        
-#         groups_for_gap.append(groups)
-#     df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
-#     df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']#总把Q2放在x的位置上！
-#     # df_gap['gap']=df_gap.iloc[:,1]-df_gap.iloc[:,2]
-#     # print(f"[CHECK] df gap columns :{df_gap.columns}!\n")
-#     # display(df_gap)
-    
-    
-#     # merge back to map:
-#     gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
-#     # print(gdf_merged.columns)
-#     # print(gdf_merged[[groupby,f'{way}_x',f'{way}_y','gap']])
-     
-#     #-------------------plot-------------------
-#     # fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-   
-#     ## cmap：    
-#     if vmin>0:#均为正
-#         cmap="OrRd"
-#     elif vmax<1 :# 大部分为负，全用蓝色！
-#         cmap= plt.cm.Blues_r 
-#     else :# 有正有负，且vmax超过1
-#         cmap='RdBu_r'
-#     print(f"[check] cmap {cmap} for gap comparaison!")
-    
-#     # 差值图在左侧显示？
-#     gdf_merged.plot(
-#         column='gap', 
-#         ax=ax, 
-#         cmap=cmap, 
-#         vmin=vmin, 
-#         vmax=vmax, 
-#         legend=False,#小图不显示热度轴 
-#         edgecolor="black",
-#         linewidth=0.5
-#         )
-       
-#     # 在ax上坐标与文字： 
-#     for idx, row in gdf_merged.iterrows():
-#         x = row.geometry.centroid.x
-#         y = row.geometry.centroid.y
-#         ax.text(
-#             x, y,
-#             f"{int(row[groupby])} arr :\n {'+' if int(row['gap'])> 0 else''}{int(row['gap'])} {col}",
-#             ha="center",
-#             va="center",
-#             fontsize=6,
-#             linespacing=1.2,
-#             # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
-#         )
-    
-#     # subtitle    
-#     ax.set_title(title, fontsize=10)
-#     ax.axis("off")
-
-   
-#     return
-
-
-
     
     
 def layout_comparison_gap (dict_gdf_joined, gdf_map,
@@ -838,28 +618,8 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
 
 
 # MOT 
-
 list_jo =['olympic', 'jo', 'stade']
 list_geo=["close"]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
