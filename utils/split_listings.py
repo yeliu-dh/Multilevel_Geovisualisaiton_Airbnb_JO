@@ -41,11 +41,9 @@ def unzip_csv_gz(folder='raw_data', output_folder='data'):
 
 
 
-
-
 ##==================================SPLIT============================================##
 
-def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85, 
+def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85, 
                         output_folder=None):
         
     Q1=pd.read_csv(path_Q1)
@@ -58,8 +56,8 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     print("len df Q2:",len(Q2))
     
     #标记Q，合并数据集：
-    Q1['scraped_date'] = f"{YEAR}Q1"# no espace between YEAR and Q!!
-    Q2['scraped_date'] = f"{YEAR}Q2"
+    Q1['scraped_date'] = f"{year}Q1"# no espace between year and Q!!
+    Q2['scraped_date'] = f"{year}Q2"
     df = pd.concat([Q1, Q2], ignore_index=True)
     df['host_since']=pd.to_datetime(df['host_since'], errors="coerce")
     print(f"len df total : {len(df)} \n")
@@ -95,7 +93,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     # mtd：根据host_since 细分new和reactive：纯向量操作（快十几倍，不需要 apply），同下效果。
     mask = (
         (df['status'] == 'reactive_host') &
-        (df['host_since'].between(f'{YEAR}-01-01', f'{YEAR}-06-30'))
+        (df['host_since'].between(f'{year}-01-01', f'{year}-06-30'))
     )
     df.loc[mask, 'status'] = 'new_host'
    
@@ -115,7 +113,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     #=============================增加host_about_q2, host_about_change列=========================
     print("BIO change".center(100, '-'))
     if 'host_about_q1' not in df:
-        df_q1 = df[df['scraped_date'] == f'{YEAR}Q1'][['host_id', 'id', 'host_about']]
+        df_q1 = df[df['scraped_date'] == f'{year}Q1'][['host_id', 'id', 'host_about']]
         df_q1 = df_q1.rename(columns={'host_about': 'host_about_q1'})
         df = df.merge(df_q1, on=['host_id', 'id'], how='left')
 
@@ -127,7 +125,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
         return SequenceMatcher(None, str(a), str(b)).ratio()
 
     # 标记 Q2 相对于 Q1 的变化
-    def host_about_change(row, threshold=THRESHD_TEXT_CHANGE):
+    def host_about_change(row, threshold=threshold_text_sim):
         """
         没改动/例外都被填为nan （包括所有Q1房东!）
         
@@ -135,7 +133,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
         """
 
         #虽然计算sim，但是所有标记成：变化1，不变0。仅用于筛选
-        if row['scraped_date'] != f"{YEAR}Q2":
+        if row['scraped_date'] != f"{year}Q2":
             return 0  # 只考虑 Q2 标记，Q1均为0
         
         if pd.isna(row['host_about_q1']) and pd.notna(row['host_about']):
@@ -155,13 +153,13 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     #=======================增加host_picture_url_q1, host_picture_url_change列=========================
     print('PIC change'.center(100,'-'))
     if "host_picture_url_q1" not in df:
-        df_q1 = df[df['scraped_date'] == f"{YEAR}Q1"][['host_id', 'id', 'host_picture_url']]
+        df_q1 = df[df['scraped_date'] == f"{year}Q1"][['host_id', 'id', 'host_picture_url']]
         df_q1 = df_q1.rename(columns={'host_picture_url': 'host_picture_url_q1'})
         df = df.merge(df_q1, on=['host_id', 'id'], how='left')
 
     # 标记 Q2 相对于 Q1 的变化
     def host_picture_url_change(row):
-        if row['scraped_date'] !=f"{YEAR}Q2":
+        if row['scraped_date'] !=f"{year}Q2":
             return 0 # 只对 Q2 标记, Q1均为0
         if pd.isna(row['host_picture_url_q1']) and pd.notna(row['host_picture_url']):
             return 1  # 新增照片
@@ -176,7 +174,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     #==============================================SPLIT==============================================
     print("split  changed and stable hosts".center(100,'-'))
     print(f"[INFO] 3 criterions : \n"
-        f"- NEW hosts enter between '{YEAR}-01-01'~'{YEAR}-06-30';\n"
+        f"- NEW hosts enter between '{year}-01-01'~'{year}-06-30';\n"
         f"- Reactive hosts : host_since not in Q1/Q2; active not in Q1, but in Q2 \n"
         f"=> ADD 'status_changed'"
         f"-BIO change in Q2;\n"
@@ -185,7 +183,7 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
         f"==> ADD 'is_changed'\n")
     
     #----------------------summary-----------------------
-    dfQ2=df[df['scraped_date']==f'{YEAR}Q2']   
+    dfQ2=df[df['scraped_date']==f'{year}Q2']   
     
 
     def get_change_levels(df):
@@ -226,31 +224,11 @@ def split_change_stable(path_Q1, path_Q2, YEAR:int,THRESHD_TEXT_CHANGE=0.85,
     end_time=time.time()
     print(f"[RUNTIME] done in {end_time-start_time:.2f} sec!")
     
-    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    outpath_df=os.path.join(OUTPUT_FOLDER, os.path.basename(path_Q2).replace('.csv', '_split.csv'))
+    os.makedirs(output_folder, exist_ok=True)
+    outpath_df=os.path.join(output_folder, os.path.basename(path_Q2).replace('.csv', '_split.csv'))
     dfQ2.to_csv(outpath_df,index=False)
     
     print(f"✅[SAVE] dfQ2 split saved to {outpath_df}!")
     return dfQ2
 
-
-
-# def save_global_change_stable_csv(csv_files, ym:str, location:str, output_folder="data_jo_processed"):
-    
-#     print("NB. csv files enter strictly in order : global-change-stable!")
-#     print(f"default output folder : {output_folder}")
-
-#     os.makedirs(output_folder, exist_ok=True)
-
-#     for i, f in enumerate(csv_files):
-#         if i==0 :
-#             output_path=f"{output_folder}\listings_jo_{location}{ym}.csv"
-#         elif i==1:
-#             output_path=f"{output_folder}\listings_jo_{location}{ym}_change.csv"
-#         elif i==2:
-#             output_path=f"{output_folder}\listings_jo_{location}{ym}_stable.csv"
-#         f.to_csv(output_path, index=False)
-#         print(f"✔ csv saved in {output_path}!")
-
-#     return 
 

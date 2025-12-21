@@ -391,6 +391,7 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
                         get_boooking_rate_l30d=False, filtrate_by_booking_rate=False,#无输入时默认不按照booking筛选 
                         obj_vars=["room_type", 'property_type',"minimum_nights","instant_bookable"], 
                         threshold_km:int=None, 
+                        # cols_to_keep=None,
                         output_folder="mod_results", filename="listings_filtered.csv"):
     # obj_vars=["room_type", "minimum_nights","instant_bookable"]#all ok,无缺失/异常
     # proxy_vars=['price',"availability_90"]
@@ -418,6 +419,8 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
         f"4) if enter 'threshold_km':\n"
         f"location :'latitude','longitude': ADD 'is_within_Xkm'\n"
         f"calculate  distance bewtween listing and its cloest venue. if it's under {threshold_km} km, 'is_within_{threshold_km} km' ==1, else 0.\n"
+        
+        f"5) cols to keep : only keeps cols needed!"
         )
     vars_to_dropna=[]    
      
@@ -426,17 +429,7 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
     df, proxy_vars=check_proxy_vars(df, proxy_vars=proxy_vars, 
                                     get_boooking_rate_l30d=get_boooking_rate_l30d)
     vars_to_dropna.extend(proxy_vars)
-    
-    # all_vars.extend(proxy_vars)    
-    # ## 单独写？
-    # if get_boooking_rate_l30d==True and filtrate_by_booking_rate==True:
-    #     print(f"len BEFORE filtrage of nan (availability==0) by 'booking_rate_l30d': {len(df_filtered)}")
-    #     df_filtered=df_filtered[df_filtered['booking_rate_l30d'].notna()]
-    #     print(f"len AFTER: {len(df_filtered)}\n")           
-    
-    # if get_boooking_rate_l30d==True:
-    #     all_vars.extend(['number_of_reviews_l30d',"booking_rate_l30d"])#?
-    
+
     print("#------------------------ obj vars ---------------------------")
     if "instant_bookable" in obj_vars:
         df["instant_bookable"]=df["instant_bookable"].fillna("f")
@@ -475,7 +468,19 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
     
     df_filtered=filter_df(df,vars=vars_to_dropna)
     desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
+
+
+    # print("# -----------------------simplify df------------------------")
     
+    # if cols_to_keep:
+    #     cols_to_keep_valid = [c for c in cols_to_keep if c in df_filtered.columns]
+    #     cols_to_keep_missing = [c for c in cols_to_keep if c not in cols_to_keep_valid]
+    #     if len(cols_to_keep_missing)>0:
+    #         print(f"[INFO] skip missing cols to keep :{'; '.join(cols_to_keep_missing)}!")
+    
+    #     df_filtered=df_filtered[cols_to_keep_valid]
+    #     print(f"[INFO] df only keeps {df_filtered.columns}!")
+        
     # save
     os.makedirs(output_folder, exist_ok=True)
     outpath_df_filtered=os.path.join(output_folder, filename)
@@ -485,6 +490,32 @@ def preprocess_obj_vars(df, proxy_vars=['price',"availability_30","availability_
     
     return df_filtered
 
+
+def keep_cols(df, cols_to_keep, 
+              save=True, output_folder=None, filename=None):
+    df_simple=df.copy()
+        
+    cols_to_keep_valid = [c for c in cols_to_keep if c in df_simple.columns]
+    cols_to_keep_missing = [c for c in cols_to_keep if c not in cols_to_keep_valid]
+    
+    if len(cols_to_keep_missing)>0:
+        print(f"[INFO] skip missing cols to keep :{'; '.join(cols_to_keep_missing)}!")
+
+    df_simple=df_simple[cols_to_keep_valid]
+    print(f"[INFO] df only keeps {df_simple.columns}!")
+    
+    if save:
+        os.makedirs(output_folder, exist_ok=True)
+        if filename==None:# fallback!
+            filename="listings_simple.csv"
+        outpath_df_simple=os.path.join(output_folder, filename)
+        df_simple.to_csv(outpath_df_simple, index=False)
+        
+        print(f"\n✅[SAVE] {len(df_simple)} df simple saved to '{outpath_df_simple}'!")
+    
+    return df_simple
+    
+    
 
 
 
@@ -604,8 +635,6 @@ def group_mean_table_ttest(df, cols_to_check, group_col='host_is_superhost',
         
             
     # reorder:
-
-    
     if save :  
         if filename_noext==None:
             filename_csv= f'table_groupby_{group_col}.csv'

@@ -2,6 +2,10 @@ import pandas as pd
 import geopandas as gpd
 import os, sys
 import matplotlib.pyplot as plt
+import math
+import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 
 ## 参数!=常量？
 
@@ -26,8 +30,6 @@ def save_gdf(gdf, outpath_gdf):
     
     print(f"☑️ [SAVE] gpkg file saved to {outpath_gdf}!")
     return 
-
-
 
 
 def df2gdf(df, crs="EPSG:4326",  save=False, output_folder=None, filename=None):
@@ -58,13 +60,12 @@ def df2gdf(df, crs="EPSG:4326",  save=False, output_folder=None, filename=None):
 
 
 
-
-
 ##=========================listings+map===========================
 def locate_points(path_listings, path_map, CRS,  
                     save_gdf_joined=False,                     
                     output_folder=None,
                     filename_gdf_joined=None):
+    #== load, align, sjoin
     if output_folder:
         os.makedirs(output_folder, exist_ok=True)
         
@@ -102,6 +103,9 @@ def locate_points(path_listings, path_map, CRS,
     return gdf_joined
 
 
+
+
+
  # val_col=groups.columns[1]
     
     # old count:
@@ -115,9 +119,42 @@ def locate_points(path_listings, path_map, CRS,
     
     
     
+    
+##==============================pts map======================================
+
+def get_pts_map(gdf_pts, gdf_map,title=None,
+                save=False,output_folder=None,):
+    
+    
+    fig, ax = plt.subplots(figsize=(16, 16))
+
+    # Afficher les jeux de données sur la carte
+    gdf_pts.plot(ax=ax, color='blue', markersize=5)
+    gdf_map.plot(ax=ax, color='white', edgecolor='black')
+
+    # Ajouter une grille de coordonnées et un titre
+    ax.set_xlabel('Coordonnée x')
+    ax.set_ylabel('Coordonnée y')
+    ax.set_title(title)
+    if save :
+        os.makedirs(output_folder,exist_ok=True)
+        
+        outpath_pts_map=os.path.join(output_folder, "pts_map.jpg")
+        plt.savefig(outpath_pts_map, dpi=300)
+        print(f"✅ [SAVE] pts map saved to {outpath_pts_map}!")
+        
+    # Afficher la carte
+    plt.show()
+
+
+    return 
+
+
+
+
+
+
 # ================================fixed map===================================
-
-
 
 def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
             col, way,
@@ -147,15 +184,14 @@ def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
         )
     
     # print(groups)
-    print(f"[CHECK] groups' type: {type(groups)}\n"
-          f"groups cols:{groups.columns}")
+    print(f"choropleth map : groups cols:{groups.columns}")
    
     # merge to gdf_map: 把统计数字铁道map上
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
 
     #-------------------plot-------------------
     fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    # 热度轴：
+    # 热度图：
     gdf_merged.plot(
         column=way,
         ax=ax,
@@ -165,19 +201,6 @@ def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
         linewidth=0.5
     )
     
-    # gdf_merged.plot(
-        # column=way, 
-        # ax=ax, 
-        # cmap="OrRd", 
-        # vmin=vmin, 
-        # vmax=vmax, 
-        # legend=False,#小图不显示热度轴 
-        # edgecolor="black",
-        # linewidth=0.5
-
-        # )
-
-
     # 坐标与文字： 
     for idx, row in gdf_merged.iterrows():
         x = row.geometry.centroid.x
@@ -192,19 +215,6 @@ def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
             # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
         )
     
-    # 绘制标注（区号）
-    # for idx, row in gdf_merged.iterrows():
-    #     x = row["geometry"].centroid.x
-    #     y = row["geometry"].centroid.y
-    #     plt.text(
-    #         x, y, 
-    #         str(row[groupby]), 
-    #         horizontalalignment='center',
-    #         fontsize=8,
-    #         fontweight='bold'
-    #     ) 
-    
-
     # title
     if loc and year and title:    
         title += f" à {loc} ({str(year)})"
@@ -224,11 +234,10 @@ def get_single_choropleth_map(gdf_joined, gdf_map, groupby,
 
 
 
-def get_choropleth_map_ax(gdf_joined, gdf_map, groupby,
-            col, way,
-            loc, year, #title=None,
-            ax, vmin, vmax,
-            # save=False, output_folder=None,filename=None
+def get_choropleth_map_ax(gdf_joined, gdf_map,
+            col, way, groupby,
+            ym, #for title
+            ax, vmin, vmax
             ):
     
     # 1/3 ways 
@@ -242,25 +251,22 @@ def get_choropleth_map_ax(gdf_joined, gdf_map, groupby,
               f" dtype :{gdf_joined[col].dtype}")
         gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
 
-    if groupby and col and way:# get nb abs  
+    if groupby and col and way: # get nb abs  
         #as_index=False 会自动把 Series 转成 DataFrame
         # 自定义的列名=处理的列，处理的方法(直接传入"mean"或者自己定义的函数)！
         groups=gdf_joined.groupby(groupby, as_index=False).agg(
                 **{way:(col, way)}
                 # way=(col, way) #简写无法动态取way的值 
         )
-    
-    # print(groups)
-    print(f"[CHECK] groups' type: {type(groups)}\n"
-          f"groups cols:{groups.columns}")
+        print(f"choropleth_ax : groups cols:{groups.columns}\n")
+
    
     # merge to gdf_map: 把统计数字铁道map上
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
 
     #-------------------plot-------------------
-    # fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-
-
+    # fig, ax = plt.subplots(1, 1, figsize=(8, 6))#子图大小格式由ax输入
+    
     # 热度轴
     gdf_merged.plot(
         column=way, 
@@ -282,51 +288,35 @@ def get_choropleth_map_ax(gdf_joined, gdf_map, groupby,
             f"{int(row[groupby])}arr:\n{int(row[way])}",
             ha="center",
             va="center",
-            fontsize=8,
+            fontsize=6,
             linespacing=1.2,
             # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
         )
-
-    #小图不设立title
-    # if loc and year and title:    
-    if year:
-        title = f"{str(year)}"
+        
+    # 小图标题:
+    if ym:
+        title = f"{str(ym)}"
         ax.set_title(title, fontsize=10)
 
     ax.axis("off")
-
-    # 小图不保存！ 
-    # if save and output_folder:
-    #     os.makedirs(output_folder, exist_ok=True)
-    #     filename=f"{col}_{way}_{loc}{year}.jpg"
-    #     outpath_fig=os.path.join(output_folder,filename)   
-    #     fig.savefig(outpath_fig, dpi=300)      
-    #     print(f"✅ [SAVE] map saved to {outpath_fig}!")
-    # plt.show()
     
     return
 
 
 
 
-def layout_maps(dict_gdf_joined, gdf_map, loc,
-                col, way, groupby,suptitle,
-                save=False, output_folder=None):
-    import matplotlib as mpl
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-    years=list(dict_gdf_joined.keys())
-    # 统一热度轴：
+def layout_comparison_maps(dict_gdf_joined, gdf_map,
+                col, way, groupby,
+                suptitle, loc,# for filename
+                n_axes, n_cols=3,#每行最多几张（列）
+                save=False, output_folder=None, filename=None):
+    
+    # vmin & vmax
     vmin, vmax=0,0
-    for year, gdf_joined in dict_gdf_joined.items():
+    for ym, gdf_joined in dict_gdf_joined.items():
         groups=gdf_joined.groupby(groupby, as_index=False).agg(
             **{way:(col, way)}
-        )
-        # print(len(groups))
-        # print(groups.columns)
-        # print(groups)
-        
-        
+        )        
         vmin_current= groups[way].min()
         if vmin> vmin_current:
             vmin=vmin_current
@@ -334,29 +324,455 @@ def layout_maps(dict_gdf_joined, gdf_map, loc,
         if vmax < vmax_current:
             vmax=vmax_current
     print(f"[INFO] vmin: {vmin}; vmax: {vmax}")
-    # fig
-    fig, axes = plt.subplots(1, 2, figsize=(20, 10))
     
+    
+    # axes
+    n_rows = math.ceil(n_axes / n_cols)
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(6* n_cols, 4 * n_rows)
+    )
+    axes = axes.flatten()
+    print (f"[INFO] figure layout: {n_rows} rows x {n_cols} cols\n")
+
+    # plot
     i=0
-    for year, gdf_joined in dict_gdf_joined.items():
-        print(f"[INFO]{i}:{year}, len gdf : {len(gdf_joined)}")
-        
-        get_choropleth_map_ax(gdf_joined, gdf_map, groupby=groupby,
-            col=col, way=way,
-            loc=loc, year=year,
+    for ym, gdf_joined in dict_gdf_joined.items():
+        print(f"[INFO]{i}:{ym}, len gdf : {len(gdf_joined)}")
+        get_choropleth_map_ax(gdf_joined, gdf_map, 
+            col=col, way=way, groupby=groupby,
+            ym=ym,
             ax=axes[i], vmin=vmin, vmax=vmax
         )
         i+=1
         
-    # 统一热度轴
-    
-    # sm = mpl.cm.ScalarMappable(cmap="OrRd", norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax))
-    # sm._A = []  # 必须加这一行才能生成 colorbar
-    # divider = make_axes_locatable(axes[-1])  # 绑定在右侧子图
-    # cax = divider.append_axes("right", size="1%", pad=0.01)
-    # cbar = fig.colorbar(sm, cax=cax)
+    #shut down
+    for j in range(i, len(axes)):
+         axes[j].axis("off")
 
-    suptitle+=f"entre {years[0]} et {years[1]} à {loc}"    
+        
+    # same cbar
+    sm = mpl.cm.ScalarMappable(
+    cmap="OrRd",
+        norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    )
+    sm._A = []
+
+    fig.subplots_adjust(right=0.88)
+    cax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(sm, cax=cax)
+    cbar.set_label(f"{col} ({way})", fontsize=6)
+
+    # 大标题：
+    plt.suptitle(
+            suptitle,
+            fontsize=20,
+            fontweight="bold",
+            # y=0.98
+        )
+
+    
+    # plt.tight_layout() #layout会压缩到cbar！   
+    
+    #save
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        if not filename:
+            filename=f"comparaison_{col}_{way}_{loc}-{'-'.join(dict_gdf_joined.keys())}.jpg"
+
+        outpath_fig=os.path.join(output_folder,filename)   
+        fig.savefig(outpath_fig, dpi=300)      
+        print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    plt.show()
+    
+
+    return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##===================================GAP COMPARISON=================================##
+
+def get_single_gap_choropleth(dict_gdf_joined, gap_between: list,
+                       gdf_map,
+                       col, way, groupby, 
+                       title, loc, save=False, output_folder=None):
+    """
+    Docstring for get_gap_choropleth
+    
+    :param dict_gdf_joined: Description
+    :param gap_between: 2 index in dict
+    """
+    # 2 ax!!!
+    # gdf1=dict_gdf_joined[gap_between[0]]
+    # gdf2=dict_gdf_joined[gap_between[1]]
+    # inupt 
+    
+    # gdfs=[dict_gdf_joined[gap_between[0]], dict_gdf_joined[gap_between[1]]]
+    dict_gdf_gap={
+        ym: dict_gdf_joined[ym]
+        for ym in gap_between
+    }
+        
+    groups_for_gap=[]
+    for ym, gdf_joined in dict_gdf_gap.items():  
+        # 1/3 ways 
+        ways =["count", "mean","sum"]
+        if way not in ways :
+            print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+        
+        # check numeric !
+        if way=="mean" or way=="sum":
+            print(f"[CHECK] needs numeric values for mean/sum! \n"
+                f" dtype :{gdf_joined[col].dtype}")
+            gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
+
+        if groupby and col and way:
+            groups=gdf_joined.groupby(groupby, as_index=False).agg(
+                    **{way:(col, way)}
+            )# => df
+            # groups.columns=[groupby, f"{way}"]
+            print(f"{ym} gap map: groups cols:{groups.columns}\n")
+        
+        groups_for_gap.append(groups)
+    df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
+    df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
+    print(f"[CHECK] df gap columns :{df_gap.columns}!")
+    # display(df_gap)
+    
+    # merge back to map:
+    gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
+    # print(gdf_merged.columns)
+    # print(gdf_merged[[groupby,f'{way}_x',f'{way}_y','gap']])
+     
+    #-------------------plot-------------------
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+   
+    ## 热度轴：    
+    # 有负值的时候才用蓝色！
+    if gdf_merged['gap'].min()>0:
+        cmap="OrRd"
+    else :
+        cmap='RdBu_r'#'coolwarm',  
+        
+    gdf_merged.plot(
+        column='gap',# 之前按照way画，
+        ax=ax,
+        legend=True,
+        cmap=cmap,
+        edgecolor="black",
+        linewidth=0.5
+    )
+    
+    # 坐标与文字： 
+    for idx, row in gdf_merged.iterrows():
+        x = row.geometry.centroid.x
+        y = row.geometry.centroid.y
+        ax.text(
+            x, y,
+            f"{int(row[groupby])} arr :\n{'+' if int(row['gap'])>=0 else '-'}{int(row['gap'])} {col}",
+            ha="center",
+            va="center",
+            fontsize=6,
+            linespacing=1.2,
+            # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
+        )
+    
+    # title
+    
+    ax.set_title(title, fontsize=10)
+    ax.axis("off")
+    
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        filename=f"gap_{col}_{way}_{loc}{'-'.join(gap_between)}.jpg"
+        outpath_fig=os.path.join(output_folder,filename)   
+        fig.savefig(outpath_fig, dpi=300)      
+        print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    plt.show()
+   
+   
+    return 
+
+
+
+def get_gap_choropleth_ax(dict_gdf_joined, gap_between: list,
+                       gdf_map,
+                       col, way, groupby, 
+                       ax, vmin, vmax, title):
+    """
+    Docstring for get_gap_choropleth
+    
+    :param dict_gdf_joined: Description
+    :param gap_between: 2 index in dict
+    """
+    # input
+    dict_gdf_gap={
+        ym: dict_gdf_joined[ym]
+        for ym in gap_between
+    }
+    
+    # gdfs=[dict_gdf_joined[gap_between[0]], dict_gdf_joined[gap_between[1]]]
+    
+    groups_for_gap=[]
+    for ym, gdf_joined in dict_gdf_gap.items():  
+        # 1/3 ways 
+        ways =["count", "mean","sum"]
+        if way not in ways :
+            print(f"[WARNING] choose a calculation method from {'/ '.join(ways)}!")
+        
+        # check numeric !
+        if way=="mean" or way=="sum":
+            print(f"[CHECK] needs numeric values for mean/sum! \n"
+                f" dtype :{gdf_joined[col].dtype}")
+            gdf_joined[col]=pd.to_numeric(gdf_joined[col], errors='coerce')
+
+        if groupby and col and way:
+            groups=gdf_joined.groupby(groupby, as_index=False).agg(
+                    **{way:(col, way)}
+            )# => df
+            groups.columns=[groupby, f"{way}"]
+            
+            print(f"{ym} gap_map_ax: groups cols:{groups.columns}")
+        
+        groups_for_gap.append(groups)
+    df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
+    df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']#总把Q2放在x的位置上！
+    # df_gap['gap']=df_gap.iloc[:,1]-df_gap.iloc[:,2]
+    # print(f"[CHECK] df gap columns :{df_gap.columns}!\n")
+    # display(df_gap)
+    
+    
+    # merge back to map:
+    gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
+    # print(gdf_merged.columns)
+    # print(gdf_merged[[groupby,f'{way}_x',f'{way}_y','gap']])
+     
+    #-------------------plot-------------------
+    # fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+   
+    ## cmap：    
+    if vmin>0:#均为正
+        cmap="OrRd"
+    elif vmax<1 :# 大部分为负，全用蓝色！
+        cmap= plt.cm.Blues_r 
+    else :# 有正有负，且vmax超过1
+        cmap='RdBu_r'
+    print(f"[check] cmap {cmap} for gap comparaison!")
+    
+    # 差值图在左侧显示？
+    gdf_merged.plot(
+        column='gap', 
+        ax=ax, 
+        cmap=cmap, 
+        vmin=vmin, 
+        vmax=vmax, 
+        legend=False,#小图不显示热度轴 
+        edgecolor="black",
+        linewidth=0.5
+        )
+       
+    # 在ax上坐标与文字： 
+    for idx, row in gdf_merged.iterrows():
+        x = row.geometry.centroid.x
+        y = row.geometry.centroid.y
+        ax.text(
+            x, y,
+            f"{int(row[groupby])} arr :\n {'+' if int(row['gap'])> 0 else''}{int(row['gap'])} {col}",
+            ha="center",
+            va="center",
+            fontsize=6,
+            linespacing=1.2,
+            # bbox=dict(facecolor="white", alpha=0.6, edgecolor="none")#+底色
+        )
+    
+    # subtitle    
+    ax.set_title(title, fontsize=10)
+    ax.axis("off")
+
+   
+    return
+
+
+
+
+
+    
+    
+def layout_gap_comparison (dict_gdf_joined, gdf_map,
+                        ym_key,
+                        col, way, groupby,
+                        n_axes, n_cols=3,
+                        suptitle=None, loc=None,#for filename
+                        save=False, output_folder="../output_map",
+                        filename=None
+                        ):
+    ## experimental group : 2406 ; control groups 2403, 2409 
+    # 只能有一个实验组，其余均是对照组？
+    
+    
+    ## ------------------------------vmin vmax-----------------------------------
+    # density
+    
+    groups=dict_gdf_joined[ym_key].groupby(groupby, as_index=False).agg(
+        **{way:(col, way)}
+    )        
+    vmin_density= groups[way].min()
+    vmax_density= groups[way].max()
+    
+    # # gap        
+    ym_refs=[i for i in dict_gdf_joined.keys() if i !=ym_key]    
+    
+    vmin_gap, vmax_gap=0,0
+    for ym_ref in ym_refs:
+        dict_gdf_gap={
+            ym: dict_gdf_joined[ym]
+            for ym in [ym_key,ym_ref]# ym_key放前！！
+        }
+        groups_for_gap=[]
+        for ym, gdf_joined in dict_gdf_gap.items():  
+            if groupby and col and way:
+                groups=gdf_joined.groupby(groupby, as_index=False).agg(
+                        **{way:(col, way)}
+                )# => df
+                print(f"layout gap_map : {ym} groups cols:{groups.columns}\n")
+            
+            groups_for_gap.append(groups)
+        df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
+        df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
+        
+        vmin_current= df_gap["gap"].min()
+        if vmin_gap> vmin_current:
+            vmin_gap=vmin_current
+    
+        vmax_current= df_gap["gap"].max()
+        if vmax_gap < vmax_current:
+            vmax_gap=vmax_current
+            
+        
+    print(f"[INFO] vmin_density:{vmin_density}, vmax_density:{vmax_density} ")
+    print(f"[INFO] vmin_gap:{vmin_gap}, vmax_gap:{vmax_gap}!")
+                
+    
+   
+    # #-----------------------------axes--------------------------------    
+    ## layout axes
+    n_rows = math.ceil(n_axes / n_cols)
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(10* n_cols, 8* n_rows)
+    )
+    axes = axes.flatten()
+    print (f"[INFO] figure layout: {n_rows} rows x {n_cols} cols\n")
+
+    
+    ## -----------------------------plot--------------------------------
+    i=0
+    for ym, gdf_joined in dict_gdf_joined.items():
+        if ym ==ym_key:#中间正常显示值
+            print(f"[INFO] event period {i}:{ym}, len gdf : {len(gdf_joined)}")
+            get_choropleth_map_ax(gdf_joined=gdf_joined, 
+                        gdf_map=gdf_map,
+                        col=col, way=way, groupby=groupby,
+                        ym=ym,
+                        ax=axes[i], vmin=vmin_density, vmax=vmax_density
+                        )        
+        
+        else : #参照组显示gap             
+            gap_between=[ym_key, ym]#key放前面,x的位置!
+            # gap_between_sorted=sorted(gap_between, key= lambda x : int(x), reverse=False)
+            
+            print(f"[INFO] gap between :{gap_between[1]}-{gap_between[0]}")
+            get_gap_choropleth_ax(dict_gdf_joined, 
+                    gap_between=gap_between,
+                    gdf_map=gdf_map,
+                    col=col, way=way, groupby=groupby, 
+                    ax=axes[i], vmin=vmin_gap, vmax=vmax_gap,
+                    title=f"{ym} comparé au {ym_key}")            
+        i+=1
+    
+    # shutdown else
+    for j in range(i, len(axes)):
+         axes[j].axis("off")
+    
+    
+    #--------------------------------cbar---------------------------------#
+    
+    # 已经在_ax中给map画了在vmin， vmax范围内的颜色
+    
+    
+    # 创建 gap colorbar（左边，覆盖 ax2 和 ax3）
+    sm_gap = mpl.cm.ScalarMappable(cmap='RdBu_r', norm=mpl.colors.Normalize(vmin=vmin_gap, vmax=vmax_gap))
+    sm_gap._A = []  # 必须赋值空数组，matplotlib hack
+    # 手动创建 axes 在 figure 左边
+    cax_gap = fig.add_axes([0.08, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    cbar_gap = fig.colorbar(sm_gap, cax=cax_gap, orientation='vertical')
+    cbar_gap.set_label(f"Ecart de {col} ({way})")
+    cbar_gap.ax.yaxis.set_label_position('left')  # label 放左边
+    cbar_gap.ax.yaxis.tick_left()                # 刻度放左边
+
+
+
+
+    # 创建 density colorbar（右边）
+    sm_density = mpl.cm.ScalarMappable(cmap='OrRd', norm=mpl.colors.Normalize(vmin=vmin_density, vmax=vmax_density))
+    sm_density._A = []
+    # 手动创建 axes 在 figure 右边
+    cax_density = fig.add_axes([0.90, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    cbar_density = fig.colorbar(sm_density, cax=cax_density, orientation='vertical')
+    cbar_density.set_label(f"{col} ({way})")
+
+
+
+
+    # # show cbar
+    # sm_density = mpl.cm.ScalarMappable(cmap='OrRd', norm=mpl.colors.Normalize(vmin=vmax_density, vmax=vmax_density))
+    # sm_density._A = []
+    # cbar_density = fig.colorbar(sm_density, ax=ax1, orientation='vertical', fraction=0.05, pad=0.02)
+    # cbar_density.set_label(f"{col} ({way})")
+
+
+    # # 创建 gap colorbar（左边，覆盖 ax2 和 ax3）
+    # sm_gap = mpl.cm.ScalarMappable(cmap='RdBu_r', norm=mpl.colors.Normalize(vmin=vmin_gap, vmax=vmax_gap))
+    # sm_gap._A = []
+    # cbar_gap = fig.colorbar(sm_gap, ax=[ax2, ax3], orientation='vertical', fraction=0.05, pad=0.02)
+    # cbar_gap.set_label(f"Ecart de {col} ({way})")
+    # cbar_gap.ax.yaxis.set_label_position('left')  # label 放左边
+    # cbar_gap.ax.yaxis.tick_left()                # 刻度放左边
+
+    
+    # ## same cbar：
+    # sm = mpl.cm.ScalarMappable(
+    # cmap="OrRd",
+    #     norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+    # )
+    # sm._A = []
+
+    # fig.subplots_adjust(right=0.88)
+    # cax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
+    # cbar = fig.colorbar(sm, cax=cax)
+    # cbar.set_label(f"{col} ({way})", fontsize=12)
+
+    
+    
+    
+    # suptitle：
     plt.suptitle(
             suptitle,
             fontsize=20,
@@ -364,52 +780,36 @@ def layout_maps(dict_gdf_joined, gdf_map, loc,
             # y=0.98
         )
     
-    # sm = mpl.cm.ScalarMappable(
-    #     cmap="OrRd",
-    #     norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    # )
-    # sm._A = []
-    # cbar = fig.colorbar(
-    #     sm,
-    #     ax=axes,
-    #     fraction=0.035,
-    #     pad=0.03
-    # ) 
-    # cbar.set_label(f"{col} ({way})", fontsize=12)
-    # cbar.ax.tick_params(labelsize=10)
-
-    ## V0
-    sm = mpl.cm.ScalarMappable(cmap="OrRd", norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax))
-    sm._A = []  # 必须加这一行才能生成 colorbar
-    cbar = fig.colorbar(sm, ax=axes, 
-                        fraction=0.02, #colorbar 宽度
-                        pad=0.03 #colorbar 和子图的间距
-                        )
-    cbar.set_label(f"{col} ({way})", fontsize=12) # label 字体大小
-    cbar.ax.tick_params(labelsize=10) # 刻度字体大小
     
-
     
-    plt.tight_layout()    
     
-    #save
+    # no layout tight!!!!!
+    ## save
     if save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
-        filename=f"comparaison_{col}_{way}_{loc}{'-'.join(years)}.jpg"
+        filename=f"gap_comparaison_{col}_{way}_{loc}{'-'.join(dict_gdf_joined.keys())}.jpg"
         outpath_fig=os.path.join(output_folder,filename)   
         fig.savefig(outpath_fig, dpi=300)      
         print(f"✅ [SAVE] map saved to {outpath_fig}!")
     plt.show()
-    
-
-    # plt.tight_layout(rect=[0, 0, 0.98, 0.95])
-    # plt.suptitle(f"Comparaison de {way} {col} entre {years[0]} et {years[1]} à {loc}", fontsize=16)
-    # plt.show()
+       
     
     return
 
 
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -417,6 +817,28 @@ def layout_maps(dict_gdf_joined, gdf_map, loc,
 
 list_jo =['olympic', 'jo', 'stade']
 list_geo=["close"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -478,8 +900,7 @@ def get_desc_map_html(gdf_joined, gdf_map,
                 **{way:(col, way)}
                 # way=(col, way) #简写无法动态取way的值 
         )
-        print(f"[CHECK] groups' type: {type(groups)}\n"
-            f"groups cols:{groups.columns}")
+        print(f"groups cols:{groups.columns}\n")
     
     # # check numeric in mean +/ sum
     # for  num_col in [mean_on,sum_on]:
