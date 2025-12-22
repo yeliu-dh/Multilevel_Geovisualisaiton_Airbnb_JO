@@ -19,7 +19,6 @@ def read_gdf(gdf_path):
     return gdf
  
 def save_gdf(gdf, outpath_gdf):
-
     if not outpath_gdf.endswith(".gpkg"):
         # shp文件无法接受col name大于10个字符，改用gpkg！
         print(f"[WARNING] check extension of outpath_gdf, should end with '.gpkg'!")
@@ -686,31 +685,7 @@ def get_desc_map_html(gdf_joined, gdf_map,
         )
         print(f"groups cols:{groups.columns}\n")
     
-    # # check numeric in mean +/ sum
-    # for  num_col in [mean_on,sum_on]:
-    #     # if num_col and num_col in gdf_joined :
-    #     if num_col and num_col in gdf_joined and gdf_joined[num_col].notna().any():
-    #         print(f"[CHECK] NUMERIC values on mean_col/count_col :{gdf_joined[num_col].dtype}=> numeric!\n")   
-    #         gdf_joined[num_col]=pd.to_numeric(gdf_joined[num_col], errors='coerce')
-        
-    # desc :groupby==ZONE        
-    # if count_on and groupby:# get nb abs  
-    #     groups=gdf_joined.groupby(groupby)[count_on].count()
-    #     groups.columns=[groupby, count_on]
-        
-    # elif mean_on and groupby:
-    #     groups=gdf_joined.groupby(groupby)[mean_on].mean()
-    #     groups.columns=[groupby, mean_on]
-    
-    # elif sum_on and groupby:
-    #     groups=gdf_joined.groupby(groupby)[sum_on].sum()
-    #     groups.columns=[groupby, sum_on]
-    
-    # val_col=groups.columns[1]
-    
-    
-    
-    
+
     
     # merge groups back to map by "groupby"
     gdf_to_map=gdf_map.merge(groups,
@@ -827,7 +802,7 @@ def get_buffer_map_html(gdf_pts, gdf_map,
     if save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
         outpath_html=os.path.join(output_folder, filename)
-        m.savesave(outpath_html)
+        m.save(outpath_html)
         print(f'✅ [SAVE] map with buffer saved to {outpath_html}!')
          
 
