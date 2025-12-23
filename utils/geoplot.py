@@ -60,10 +60,10 @@ def df2gdf(df, crs="EPSG:4326",  save=False, output_folder=None, filename=None):
 
 
 ##=========================listings+map===========================
-def locate_points(path_listings, path_map, CRS,  
+def locate_points(path_listings, path_map, crs="EPSG:4326",  
                     save_gdf_joined=False,                     
                     output_folder=None,
-                    filename_gdf_joined=None):
+                    filename=None):
     #== load, align, sjoin
     if output_folder:
         os.makedirs(output_folder, exist_ok=True)
@@ -72,7 +72,7 @@ def locate_points(path_listings, path_map, CRS,
     df=pd.read_csv(path_listings)
     # display(df.head())
     
-    gdf_listings=df2gdf(df=df, crs=CRS,
+    gdf_listings=df2gdf(df=df, crs=crs,
         save=False, output_folder=output_folder,
         filename=None)
     
@@ -100,7 +100,7 @@ def locate_points(path_listings, path_map, CRS,
     
     # save:
     if save_gdf_joined:
-        outpath_gdf_joined=os.path.join(output_folder, filename_gdf_joined)
+        outpath_gdf_joined=os.path.join(output_folder, filename)
         save_gdf(gdf=gdf_joined, outpath_gdf=outpath_gdf_joined)
         
     return gdf_joined
@@ -640,14 +640,154 @@ def layout_comparison_gap (dict_gdf_joined, gdf_map,
 
 
 
+##==============================choropleth+buffer=====================================
+def draw_buffer(ax, gdf_points, buffer_dist=3000, buffer_label="Venue buffer"):
+    """
+    在地图上绘制 gdf_points 的缓冲区（单位：米）
+    """
+    # 1. 转为米（EPSG:2154）
+    gdf_m = gdf_points.to_crs(epsg=2154)
+
+    # 2. 计算 buffer（米）
+    gdf_m["buffer"] = gdf_m.geometry.buffer(buffer_dist)
+
+    # 3. 将 geometry 改为 buffer（关键步骤）
+    gdf_buffer = gdf_m.set_geometry("buffer")
+
+    # 4. 转回 WGS84（EPSG:4326）
+    gdf_buffer = gdf_buffer.to_crs(epsg=4326)
+
+    # 5. 绘制
+    gdf_buffer.plot(
+        ax=ax,
+        edgecolor="skyblue",
+        facecolor="skyblue",
+        linewidth=1.2,
+        alpha=0.1,
+        label=buffer_label
+    )
+    return #gdf_buffer
+
+
+import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
+
+
+def get_choro_circle_map(groups, col_choropleth=None, col_circle=None, add_buffer_m=None,
+            k=5,cmap=None,
+            title_cbar="Part des hôtes réactifs",
+            title="Part des hôtes réactifs par arrondissement et localisation des sites olympiques"
+            ):
+    if cmap==None:    
+        base = plt.cm.OrRd
+        colors = base(np.linspace(0.1, 0.6, 256))  # 只取中间浅色段
+        cmap_light = LinearSegmentedColormap.from_list("OrRd_light", colors)
+        cmap=cmap_light
+   
+    groupby="c_ar"
+    gdf_map=gpd.read_file("../data_map\paris_ar.gpkg")
+    gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
+    # display(gdf_merged)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+    
+    # -------------------------choropleth-------------------------------
+    if col_choropleth:
+        
+        vmin=groups[col_choropleth].min()
+        vmax=groups[col_choropleth].max()
+        print(vmin, vmax)
+
+        gdf_merged.plot(
+            column=col_choropleth,
+            ax=ax,
+            vmin=vmin,
+            vmax=vmax,
+            legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
+            cmap=cmap,       
+            edgecolor="black",
+            linewidth=0.5
+        ) 
+
+        # 坐标与文字：
+        for idx, row in gdf_merged.iterrows():
+            x = row.geometry.centroid.x
+            y = row.geometry.centroid.y
+            ax.text(
+                x, y,
+                f"{int(row[groupby])} arr\n{row[col_choropleth]*100:.1f}%",
+                ha="center",
+                va="center",
+                fontsize=8,
+                linespacing=1.2,
+            )
+            
+        sm = mpl.cm.ScalarMappable(
+        cmap=cmap,
+        norm=mpl.colors.Normalize(
+                vmin=vmin,
+                vmax=vmax
+            )
+        )
+        sm._A = []
+        cax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
+        cbar = fig.colorbar(sm, cax=cax)
+        cbar.set_label(title_cbar)#*   
 
 
 
+    #----------------------porportional circle--------------------
+    if col_circle:
+        # k = 5  # 缩放因子，按效果调
+        centroids = gdf_merged.geometry.centroid
+        ax.scatter(
+            centroids.x,
+            centroids.y,
+            s = gdf_merged[col_circle] * k,   # ← 可替换
+            facecolors="none",
+            edgecolors="black",
+            linewidth=1,
+            zorder=2
+        )
+        
+        for size in [50,250, 500]:
+            ax.scatter([], [], s=size, facecolors="none",
+                    edgecolors="black",
+                    label=f"{int(size/k)}% hôtes")
 
-# MOT 
-list_jo =['olympic', 'jo', 'stade']
-list_geo=["close"]
+        ax.legend(
+            title=col_circle,
+            loc="lower left",
+            frameon=True
+    )
+    
+    #--------------------------venues------------------------------
+    gdf_venues=gpd.read_file("../data_geo\main_venues_JO.gpkg")
+    label="Sites olympiques"
+    if add_buffer_m!=None and add_buffer_m!=0:
+        draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer")
+        label=f"Sites olympiques (buffer {add_buffer_m/1000:.1f}km)"
+    
+    
+    # center
+    gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
+    gdf_venues.plot(
+        ax=ax, 
+        markersize=100, 
+        color="blue", 
+        marker="*",
+        label=label
+    )
 
+    #-------------------------titile------------------------
+    ax.set_title(title, fontsize=10, pad=10)# pad btw title & ax
+    ax.axis("off")
+    ax.legend()
+    plt.show()
+  
+    return plt
 
 
 
