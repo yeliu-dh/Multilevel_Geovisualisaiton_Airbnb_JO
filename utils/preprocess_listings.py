@@ -348,7 +348,8 @@ def add_booking_rate_l90d(df, df_nextQ):
 
     df_reviews['number_of_reviews_nextQ']=df_reviews['number_of_reviews_till_nextQ']-df_reviews["number_of_reviews_till_Q"]
     df_reviews['number_of_reviews_nextQ']=df_reviews['number_of_reviews_nextQ'].apply(lambda x : np.nan if x<0 else x)
-    
+    print(f"[CHECK] no match on reviews_nextQ : {len(df_reviews[df_reviews['number_of_reviews_nextQ'].isna()])};\n"
+          f"ava90==0: {len(df_reviews[df_reviews['availability_90']==0])}")
     df_reviews['booking_rate_l90d'] = df_reviews.apply(
                 lambda row: min(row['number_of_reviews_nextQ'] / row['availability_90'], 1.0)
                 if row['availability_90'] > 0 else None,
@@ -498,9 +499,10 @@ def preprocess_obj_vars(df, df_nextQ, proxy_vars=['price',"availability_30","ava
         vars_to_dropna.extend(["number_of_reviews_l30d","availability_30","booking_rate_l30d"])
     
     if get_booking_rate_l90d==True :
-        if  df_nextQ is not None and not df_nextQ.empty:
+        if  df_nextQ is  None or df_nextQ.empty:
             print(f"[CHECK] need df_nextQ!!!")
         else :
+            print(f"[CHECK] get booking_rate_l90d!")
             df=add_booking_rate_l90d(df, df_nextQ)
         vars_to_dropna.extend(["number_of_reviews_nextQ","availability_90","booking_rate_l90d"])
     

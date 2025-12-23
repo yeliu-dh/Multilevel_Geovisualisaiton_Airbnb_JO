@@ -70,20 +70,23 @@ def locate_points(path_listings, path_map, CRS,
         
     print("df_listings to gdf_listings by latitude and longitude!".center(100,"-"))        
     df=pd.read_csv(path_listings)
+    # display(df.head())
     
     gdf_listings=df2gdf(df=df, crs=CRS,
         save=False, output_folder=output_folder,
-        filename='')
+        filename=None)
     
     print("read gdf map".center(100,'-'))
     gdf_map=read_gdf(path_map)
-    
+    # print(gdf_map.crs)
+    # print(gdf_map.head())
     
     print("join gdf_listings and gdf".center(100,'-'))
     if gdf_listings.crs!=gdf_map.crs:
         print(f"[WARNING] {gdf_listings.crs}!={gdf_map.crs}")
     
     # make sure
+    
     gdf_listings = gdf_listings.to_crs(gdf_map.crs)
     
     #join: 把每一个 Airbnb 房源点，和它“所在的地图区域（多边形）”连在一起。
@@ -93,6 +96,7 @@ def locate_points(path_listings, path_map, CRS,
         how="left",#保留左表gdf_listings的所有行,即使没有在右表中找到，填nan
         predicate="within"#左边的几何对象（pts）在右边的几何对象（polygone）之中
     )
+    # display(gdf_joined)
     
     # save:
     if save_gdf_joined:
@@ -111,16 +115,24 @@ def locate_points(path_listings, path_map, CRS,
 def get_pts_map(gdf_pts, gdf_map,title=None,
                 save=False,output_folder=None,):
     
+    gdf_pts=gdf_pts.to_crs(gdf_map.crs)
+    print("pts CRS:", gdf_pts.crs)
+    print("map CRS:", gdf_map.crs)
+
+
     fig, ax = plt.subplots(figsize=(16, 16))
 
     # Afficher les jeux de données sur la carte
-    gdf_pts.plot(ax=ax, color='blue', markersize=5)
+    # gdf_pts.plot(ax=ax, color='blue', markersize=5)
+    # gdf_map.plot(ax=ax, color='white', edgecolor='black')
     gdf_map.plot(ax=ax, color='white', edgecolor='black')
+    gdf_pts.plot(ax=ax, color='blue', markersize=20)
 
     # Ajouter une grille de coordonnées et un titre
     ax.set_xlabel('Coordonnée x')
     ax.set_ylabel('Coordonnée y')
     ax.set_title(title)
+    
     if save :
         os.makedirs(output_folder,exist_ok=True)
         
@@ -199,7 +211,6 @@ def get_groups (gdf_joined, col, way, groupby):
                 # way=(col, way) #简写无法动态取way的值 
         )
          
-        
     vmin= groups[way].min()
     vmax= groups[way].max()
     return groups, vmin, vmax
@@ -214,9 +225,10 @@ def get_groups (gdf_joined, col, way, groupby):
 #===============================choropleth map=============================================
 
 def get_choropleth_map(gdf_joined, 
+            gdf_venues,
             gdf_map, 
             col, way, groupby,
-            subtitle,
+            subtitle=None,
             fig=None, subax=None, vmin=None, vmax=None,# oblig for subplot
             save=False, loc=None, ym=None, 
             output_folder=None,filename=None
@@ -229,6 +241,7 @@ def get_choropleth_map(gdf_joined,
     
     # agg
     groups, vmin_current, vmax_current =get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
+    # display(groups)
     
     # merge back to gdf_map
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
@@ -278,6 +291,19 @@ def get_choropleth_map(gdf_joined,
             fontsize=fontsize_text,
             linespacing=1.2,
         )
+        
+        
+    if gdf_venues is not None and not gdf_venues.empty:#不为none且不为空        
+        # center
+        gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
+        gdf_venues.plot(
+            ax=ax, 
+            markersize=100, 
+            color="blue", 
+            marker="*",
+            label="Main Venue"
+        )
+
     
     ax.set_title(subtitle, fontsize=10, pad=10)# pad btw title & ax
     ax.axis("off")
@@ -299,6 +325,7 @@ def get_choropleth_map(gdf_joined,
 
 
 def layout_comparison_indep(dict_gdf_joined, gdf_map,
+                gdf_venues,
                 col, way, groupby,
                 suptitle, loc, # for filename
                 n_axes, n_cols=3,#每行最多几张（列）
@@ -331,6 +358,7 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
     for ym, gdf_joined in dict_gdf_joined.items():
         get_choropleth_map(gdf_joined=gdf_joined, 
             gdf_map=gdf_map, 
+            gdf_venues=gdf_venues,
             col=col, way=way, groupby=groupby,
             subtitle=ym,
             fig=fig, subax=axes[i], vmin=vmin, vmax=vmax,

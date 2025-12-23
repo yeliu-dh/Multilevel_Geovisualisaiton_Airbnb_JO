@@ -71,14 +71,14 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     merged = hosts_Q1.merge(hosts_Q2, on='host_id', how='outer')
     """
     merged:
-        host_id   Q1   Q2          status
+            host_id   Q1   Q2          status
     0            275  1.0  NaN  deactived_host
     1           2626  6.0  3.0        old_host
 
     """
 
     # 标记每个host_id在Q1>Q2的状态:
-    # reactive_host, desactive_host, old_host : listings增加/减少/不变
+    # reactive_host(这里包括了new host), desactive_host, old_host : listings增加/减少/不变
     merged['status'] = merged.apply(
         lambda r:
             'reactive_host' if pd.isna(r['Q1']) else
@@ -90,9 +90,10 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     # 按照host_id merge back
     df=df.merge(merged[['host_id','status']], left_on='host_id', right_on='host_id',how='left')
 
-    # 把reactive_host和host_since在今年6以前的标记为new_host, 做成mask
+    # 把是reactive_host，且host_since在今年6以前的标记为new_host, 做成mask
     # 仅用host_since只能识别出很小一部分的房东，可能很早注册房东，但没有出租，受到JO刺激才进入市场！
     # mtd：根据host_since 细分new和reactive：纯向量操作（快十几倍，不需要 apply），同下效果。
+    
     mask = (
         (df['status'] == 'reactive_host') &
         (df['host_since'].between(f'{year}-01-01', f'{year}-06-30'))# faut int ici!!!
