@@ -173,7 +173,31 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     if "host_picture_url_changed" not in df:
         df['host_picture_url_changed'] = df.apply(host_picture_url_change, axis=1)
 
+    #=======================增加number_of_reviews_q1, =========================
 
+    print('number of reviews till previousQ'.center(100,'-'))
+    if "number_of_reviews_till_previousQ" not in df:
+        df_q1 = df[df['scraped_date'] == f"{year}Q1"][['host_id', 'id', "availability_90",'number_of_reviews']]
+        df_q1 = df_q1.rename(columns={"availability_90":"availability_90_previousQ",
+                                      'number_of_reviews': 'number_of_reviews_till_previousQ'})
+        df = df.merge(df_q1, on=['host_id', 'id'], how='left')
+        df["number_of_reviews_till_previousQ"]=df["number_of_reviews_till_previousQ"].fillna(0)
+
+    def calculate_reviews_growth(row): 
+        growth=row['number_of_reviews']-row['number_of_reviews_till_previousQ']
+        if growth<0:
+            growth=0
+        return growth     
+    if "number_of_reviews_thisQ" not in df:    
+        df['number_of_reviews_thisQ'] = df.apply(calculate_reviews_growth, axis=1)
+    
+    df['booking_rate_l90d_previousQ'] = df.apply(
+                lambda row: min(row['number_of_reviews_thisQ'] / row['availability_90_previousQ'], 1.0)
+                if row['availability_90_previousQ'] > 0 else None,
+                axis=1
+            )
+    
+    
     #==============================================SPLIT==============================================
     print("split  changed and stable hosts".center(100,'-'))
     print(f"[INFO] 3 criterions : \n"
@@ -201,6 +225,12 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
             (df['host_picture_url_changed']==1)
         ).astype(int)
         
+        # sp_changed-new
+        df['old_host_sp_changed'] = (
+            (df['sp_changed']==1)&
+            (df['status_changed']==0)
+        ).astype(int)
+        
         #overall
         df['is_changed'] = (
             (df['status_changed']==1)|
@@ -212,14 +242,11 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
 
     print(f"[INFO] host status in Q2:\n {dfQ2.status.value_counts(dropna=False)}\n")   
 
-    print(f"[INFO] host BIO change in Q2: 1/0:"
-        f"{dfQ2.host_about_changed.value_counts(dropna=False)}\n")
+    print(f"old host BIO change in Q2: 1/0:\n"
+        f"{dfQ2.old_host_sp_changed.value_counts(dropna=False)}\n")
         
-    print(f"[INFO] PIC change in Q2: 1/0:"
-        f"{dfQ2.host_picture_url_changed.value_counts(dropna=False)}\n")
-    
-    print(f"[INFO] SP changed in Q2: 1/0:\n"
-          f"{dfQ2.sp_changed.value_counts(dropna=False)}\n")
+    print(f"number of reviews in Q2:\n",
+          f"{dfQ2['number_of_reviews_thisQ'].value_counts(dropna=False)}")
     
     print(f"[INFO] OVERALL changed : {len(dfQ2[dfQ2['is_changed']==1])}; stable : {len(dfQ2[dfQ2['is_changed']==0])}\n")
          

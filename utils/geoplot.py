@@ -325,7 +325,8 @@ def get_choropleth_map(gdf_joined,
         fig.savefig(outpath_fig, dpi=300)      
         print(f"✔ [SAVE] choropleth map saved to {outpath_fig}!")
         plt.show()
-    
+        # gdf_pts.plot(ax=ax, color='blue', markersize=20)
+
     return
 
 
@@ -478,7 +479,7 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
         
     # -------------------------choropleth-------------------------------
     if col_choropleth:
-        if not subax :
+        if not subax and not vmin_ratio :
             vmin=groups[col_choropleth].min()
             vmax=groups[col_choropleth].max()
             print("vmin vmax of current groups:", vmin, vmax)
