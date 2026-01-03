@@ -44,7 +44,7 @@ def unzip_csv_gz(folder='raw_data', output_folder='data'):
 ##==================================SPLIT============================================##
 
 def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85, 
-                        output_folder=None, filename=None):
+                        save=False, output_folder=None, filename=None):
     # return dfQ2_split
     
       
@@ -90,6 +90,7 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     # 按照host_id merge back
     df=df.merge(merged[['host_id','status']], left_on='host_id', right_on='host_id',how='left')
 
+    
     # 把是reactive_host，且host_since在今年6以前的标记为new_host, 做成mask
     # 仅用host_since只能识别出很小一部分的房东，可能很早注册房东，但没有出租，受到JO刺激才进入市场！
     # mtd：根据host_since 细分new和reactive：纯向量操作（快十几倍，不需要 apply），同下效果。
@@ -173,7 +174,7 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     if "host_picture_url_changed" not in df:
         df['host_picture_url_changed'] = df.apply(host_picture_url_change, axis=1)
 
-    #=======================增加number_of_reviews_q1, =========================
+    #=======================增加number_of_reviews_q1,booking_rate_l90d_previousQ =========================
 
     print('number of reviews till previousQ'.center(100,'-'))
     if "number_of_reviews_till_previousQ" not in df:
@@ -182,6 +183,7 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
                                       'number_of_reviews': 'number_of_reviews_till_previousQ'})
         df = df.merge(df_q1, on=['host_id', 'id'], how='left')
         df["number_of_reviews_till_previousQ"]=df["number_of_reviews_till_previousQ"].fillna(0)
+
 
     def calculate_reviews_growth(row): 
         growth=row['number_of_reviews']-row['number_of_reviews_till_previousQ']
@@ -195,8 +197,15 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
                 lambda row: min(row['number_of_reviews_thisQ'] / row['availability_90_previousQ'], 1.0)
                 if row['availability_90_previousQ'] > 0 else None,
                 axis=1
-            )
-    
+            )    
+    ##增加一种reactive host:在Q1中ava90==0，Q2开放
+    mask = (
+        (df['availability_90_previousQ'] == 0) &
+        (df['availability_90']!=0)
+    )
+    print("before include ava90",len(df[df["status"]=="reactive_host"]))
+    df.loc[mask, 'status'] = 'reactive_host'
+    print('after',len(df[df["status"]=="reactive_host"]))
     
     #==============================================SPLIT==============================================
     print("split  changed and stable hosts".center(100,'-'))
@@ -207,6 +216,7 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
         f"-BIO change in Q2;\n"
         f"-PIC change in Q2 \n"
         f"=> ADD 'sp_changed'\n"
+        f"=> ADD 'old_host_sp_changed\n'"
         f"==> ADD 'is_changed'\n")
     
     #----------------------summary-----------------------
@@ -246,7 +256,12 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
         f"{dfQ2.old_host_sp_changed.value_counts(dropna=False)}\n")
         
     print(f"number of reviews in Q2:\n",
-          f"{dfQ2['number_of_reviews_thisQ'].value_counts(dropna=False)}")
+          f"{dfQ2['number_of_reviews_thisQ'].value_counts(dropna=False)}\n")
+    
+    print(f"booking90 previousQ isna:\n"
+          f"{dfQ2['booking_rate_l90d_previousQ'].isna().value_counts()}\n"
+          f"{dfQ2['booking_rate_l90d_previousQ'].describe(include='all')}\n")
+    
     
     print(f"[INFO] OVERALL changed : {len(dfQ2[dfQ2['is_changed']==1])}; stable : {len(dfQ2[dfQ2['is_changed']==0])}\n")
          
@@ -254,13 +269,14 @@ def split_change_stable(path_Q1, path_Q2, year:int,threshold_text_sim=0.85,
     end_time=time.time()
     print(f"[RUNTIME] done in {end_time-start_time:.2f} sec!")
     
-    os.makedirs(output_folder, exist_ok=True)
-    if filename ==None:
-        filename=os.path.basename(path_Q2).replace('.csv', '_split.csv')
-    outpath_df=os.path.join(output_folder,filename)
-    dfQ2.to_csv(outpath_df,index=False)
-    
-    print(f"✅[SAVE] dfQ2 split saved to {outpath_df}!")
+    if save :
+        os.makedirs(output_folder, exist_ok=True)
+        if filename ==None:
+            filename=os.path.basename(path_Q2).replace('.csv', '_split.csv')
+        outpath_df=os.path.join(output_folder,filename)
+        dfQ2.to_csv(outpath_df,index=False)
+        
+        print(f"✅[SAVE] dfQ2 split saved to {outpath_df}!")
     return dfQ2
 
 

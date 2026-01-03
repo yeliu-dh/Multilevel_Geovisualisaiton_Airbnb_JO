@@ -352,7 +352,7 @@ def add_booking_rate_l90d(df, df_nextQ):
           f"ava90==0: {len(df_reviews[df_reviews['availability_90']==0])}")
     df_reviews['booking_rate_l90d'] = df_reviews.apply(
                 lambda row: min(row['number_of_reviews_nextQ'] / row['availability_90'], 1.0)
-                if row['availability_90'] > 0 else None,
+                if row['availability_90'] > 0 else None,#直接去掉了不开放房东的行！不需要再在ava上drop0
                 axis=1
             )
     return df_reviews
@@ -478,7 +478,7 @@ def preprocess_obj_vars(df, df_nextQ, proxy_vars=['price',"availability_30","ava
         
         f"5) filter : dropna on vars ==> desc df_filtered \n\n"
         f"desc statistique :{', '.join(obj_vars)} \n\n"
-        
+                
         f"6) if enter 'threshold_km':\n"
         f"location :'latitude','longitude': ADD 'is_within_Xkm'\n"
         f"calculate  distance bewtween listing and its cloest venue. if it's under {threshold_km} km, 'is_within_{threshold_km} km' ==1, else 0.\n\n"
@@ -546,7 +546,6 @@ def preprocess_obj_vars(df, df_nextQ, proxy_vars=['price',"availability_30","ava
     df_filtered=filter_df(df,vars=vars_to_dropna, 
                           filtrate_by_booking_rate_l30d=filtrate_by_booking_rate_l30d,
                           filtrate_by_booking_rate_l90d=filtrate_by_booking_rate_l90d)
-    
     
     desc_catORnum(df=df_filtered, vars=vars_to_dropna) 
 
