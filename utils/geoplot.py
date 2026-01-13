@@ -151,6 +151,10 @@ def get_pts_map(gdf_pts, gdf_map,title=None,
 
 def get_cmap(vmin, vmax):    
     if vmin>=0:#均为正
+        # base = plt.cm.OrRd
+        # colors = base(np.linspace(0.1, 0.6, 256))  # 只取中间浅色段
+        # cmap_light = LinearSegmentedColormap.from_list("OrRd_light", colors)
+        # cmap=cmap_light
         cmap="OrRd"
     elif vmax<1 :# 大部分为负，全用蓝色！
         cmap= plt.cm.Blues_r 
@@ -160,9 +164,9 @@ def get_cmap(vmin, vmax):
 
 
 def add_cbar(vmin, vmax, 
-             fig, on_right=True, 
-             col=None, way=None,
-             cmap=None):
+            fig, on_right=True, 
+            cbar_label=None,
+            cmap=None):
     if cmap==None:
         cmap=get_cmap(vmin, vmax)
         print(f"[CHECK] {vmin:.2f}-{vmax:.2f}=> cmap {cmap}")
@@ -174,18 +178,21 @@ def add_cbar(vmin, vmax,
     
     sm._A = []
     if on_right==True:    
-        cax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
+        cax = fig.add_axes([0.90, 0.15, 0.02, 0.5])
+        # cax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
         # [left, bottom, width, height]
     
     else :
-        cax=fig.add_axes([0.08, 0.25, 0.02, 0.5])
+        cax=fig.add_axes([0.08, 0.15, 0.02, 0.5])
         
     cbar = fig.colorbar(sm, cax=cax)
-    if way :
-        cbar_label=f"{col}({way})"
-    else :
-        cbar_label=f"{col}"
-
+    
+    # cbar_label=""
+    # if col and way  :
+    #     cbar_label=f"{col}({way})"
+    # elif col :
+    #     cbar_label=f"{col}"
+    
     cbar.set_label(cbar_label, fontsize=10)
     cbar.ax.tick_params(labelsize=8)
     # return #  条件赋值 / 间接赋值 / return 会将变量认为是局部变量
@@ -283,7 +290,7 @@ def get_choropleth_map(gdf_joined,
     if not subax: 
         add_cbar(vmin=vmin, vmax=vmax, 
              fig=fig, on_right=True, 
-             col=col, way=way, cmap=cmap)
+             cbar_label=f"{col}({way})", cmap=cmap)
     
     
     # 坐标与文字：
@@ -382,7 +389,7 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
     # add cbar
     add_cbar(vmin, vmax, 
              fig, on_right=True, 
-             col=col, way=way)# camp?
+             cbar_label=f"{col}({way})")# camp?
            
 
     # 大标题：
@@ -451,15 +458,14 @@ from matplotlib.colors import LinearSegmentedColormap
 def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None, 
             col_choropleth="ratio", col_circle="count", 
             groupby="c_ar",
-            vmin_ratio=None, vmax_ratio=None, 
-            vmin_count=None, vmax_count=None, 
+            vmin_choro=None, vmax_choro=None, 
+            vmin_circle=None, vmax_circle=None, 
             fig=None, subax=None,
             k=None,cmap=None,
             title_cbar="Part des hôtes réactifs",
             title="Part des hôtes réactifs par arrondissement et localisation des sites olympiques"
         ):
-    print(f"[input] RATIO vmin vmax :{vmin_ratio}-{vmax_ratio}")
-    print(f"[input] COUNT vmin vmax :{vmin_count}-{vmax_count}")
+    print(f"[input] CIRCLE (COUNT) vmin vmax :{vmin_circle}-{vmax_circle}")
 
     if cmap==None:    
         base = plt.cm.OrRd
@@ -479,16 +485,18 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
         
     # -------------------------choropleth-------------------------------
     if col_choropleth:
-        if not subax and not vmin_ratio :
-            vmin=groups[col_choropleth].min()
-            vmax=groups[col_choropleth].max()
-            print("vmin vmax of current groups:", vmin, vmax)
+        if not subax and  vmin_choro is None and vmax_choro is None:
+            vmin_choro=groups[col_choropleth].min()
+            vmax_choro=groups[col_choropleth].max()
+            print("vmin vmax of current groups:", vmin_choro, vmax_choro)
+        else :
+            print(f"[input] CHORO (RATIO) vmin vmax :{vmin_choro}-{vmax_choro}")
         
         gdf_merged.plot(
             column=col_choropleth,
             ax=ax,
-            vmin=vmin_ratio,
-            vmax=vmax_ratio,
+            vmin=vmin_choro,
+            vmax=vmax_choro,
             legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
             cmap=cmap,       
             edgecolor="black",
@@ -507,27 +515,20 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
                 fontsize=8,
                 linespacing=1.2,
             )
-            
-        # add cbar         
-        # sm = mpl.cm.ScalarMappable(
-        # cmap=cmap,
-        # norm=mpl.colors.Normalize(
-        #         vmin=vmin,
-        #         vmax=vmax
-        #     )
-        # )
-        # sm._A = []
-        # cax = fig.add_axes([0.90, 0.25, 0.02, 0.5])
-        # cbar = fig.colorbar(sm, cax=cax)
-        # cbar.set_label(title_cbar)#*   
-
-
+        if not subax: 
+            add_cbar(vmin=vmin_choro, vmax=vmax_choro, 
+                fig=fig, on_right=True, 
+                cbar_label='proportion de hôte', cmap=cmap)
 
     #----------------------porportional circle--------------------
     if col_circle:
+        if not vmin_circle and not vmax_circle :
+            vmin_circle=groups[col_circle].min()
+            vmax_circle=groups[col_circle].max()
+            
         if not k :            
             max_marker_area = 5000  # 你视觉上觉得最大的圆
-            k = max_marker_area / vmax_count
+            k = max_marker_area / vmax_circle
             print(f"suitable k : {k}!")
 
         # k = 5  # 缩放因子，按效果调
@@ -540,23 +541,11 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
             edgecolors="black",
             linewidth=1,
             zorder=2
-        )        
+        )   
+        if not subax:        
+            add_circle_legend(k=5, vmin_circle=vmin_circle, vmax_circle=vmax_circle,fig=fig)
+            
         
-        # legend_values = np.linspace(vmin_count, vmax_count, 3)        
-        # # legend_values = np.quantile(
-        # #     gdf_merged[col_circle].dropna(),
-        # #     [0.25, 0.5, 0.75]
-        # # )
-        # for size in legend_values:
-        #     ax.scatter([], [], s=size*k, facecolors="none",
-        #             edgecolors="black",
-        #             label=f"{int(size/k)} hôtes")
-        # if not subax:
-        #     ax.legend(
-        #         title=col_circle,
-        #         loc="lower left",
-        #         frameon=True
-        #     )
     
     #--------------------------venues------------------------------
     if not gdf_venues is None and not gdf_venues.empty:
@@ -581,10 +570,6 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
     # plt.show()
   
     return plt
-
-
-
-
 
 
 
@@ -615,33 +600,33 @@ def layout_comparison_indep2(dict_gdf_joined, gdf_map,
                 n_axes, n_cols=3,#每行最多几张（列）
                 save=False, output_folder=None, filename=None):
     dict_groups={}
-    
+
     # vmin & vmax
-    vmin_ratio, vmax_ratio=0,0
-    vmin_count, vmax_count=0,0
+    vmin_choro, vmax_choro=0,0
+    vmin_circle, vmax_circle=0,0
     for ym, gdf_joined in dict_gdf_joined.items():
         groups=get_groups_count_ratio(gdf_joined=gdf_joined, col_choropleth=col,col_circle=col, groupby=groupby)
         dict_groups[ym]=groups
         #默认给ratio画choropleth，找到对应的cbar
-        vmin_ratio_current,vmax_ratio_current=groups['ratio'].min(),groups['ratio'].max()
+        vmin_choro_current,vmax_choro_current=groups['ratio'].min(),groups['ratio'].max()
         # vmax_ratio_current=groups['ratio'].max()
-        vmin_count_current,vmax_count_current=groups['count'].min(),groups['count'].max()
+        vmin_circle_current,vmax_circle_current=groups['count'].min(),groups['count'].max()
      
-        if vmin_ratio> vmin_ratio_current:
-            vmin_ratio=vmin_ratio_current
-        if vmax_ratio < vmax_ratio_current:
-            vmax_ratio=vmax_ratio_current
+        if vmin_choro> vmin_choro_current:
+            vmin_choro=vmin_choro_current
+        if vmax_choro < vmax_choro_current:
+            vmax_choro=vmax_choro_current
         
         
-        if vmin_count> vmin_count_current:
-            vmin_count=vmin_count_current
-        if vmax_count < vmax_count_current:
-            vmax_count=vmax_count_current
-    print(f"[INFO] RATIO vmin-vmax of {col}: {vmin_ratio}-{vmax_ratio}!")    
-    print(f"[INFO] COUNT vmin-vmax of {col}: {vmin_count}-{vmax_count}!")
-    
-    
-    
+        if vmin_circle > vmin_circle_current:
+            vmin_circle=vmin_circle_current
+        if vmax_circle < vmax_circle_current:
+            vmax_circle=vmax_circle_current
+
+    print(f"[INFO] OVERALL RATIO vmin-vmax of {col}: {vmin_choro:.2f} ~ {vmax_choro:.2f}")    
+    print(f"COUNT vmin-vmax of {col}: {vmin_circle:.2f} ~ {vmax_circle:.2f}")
+       
+
     # axes
     n_rows = math.ceil(n_axes / n_cols)
     fig, axes = plt.subplots(
@@ -655,16 +640,17 @@ def layout_comparison_indep2(dict_gdf_joined, gdf_map,
     # plot
     i=0
     for ym, groups in dict_groups.items():
-        get_choro_circle_map(groups=groups, gdf_map=gdf_map,gdf_venues=gdf_venues,
+        get_choro_circle_map(groups=groups, gdf_map=gdf_map, gdf_venues=gdf_venues,add_buffer_m=add_buffer_m, 
+            col_choropleth="ratio", col_circle="count", 
             groupby="c_ar",
-            vmin_ratio=vmin_ratio, vmax_ratio=vmax_ratio, 
-            vmin_count=vmin_count, vmax_count=vmax_count,  
-            col_choropleth="ratio", col_circle="count", add_buffer_m=add_buffer_m,
-            k=None,cmap=None,
-            title_cbar="Part des hôtes",
-            title=ym,
+            vmin_choro=vmin_choro, vmax_choro=None, 
+            vmin_circle=vmin_circle, vmax_circle=vmax_circle, 
             fig=fig, subax=axes[i],
-            )                
+            k=None,cmap=None,
+            title_cbar=None,#小图中不显示cbar
+            title=ym
+        )           
+                
         i+=1
         
     #shut down
@@ -672,24 +658,20 @@ def layout_comparison_indep2(dict_gdf_joined, gdf_map,
          axes[j].axis("off")
                  
     # add cbar
-    add_cbar(vmin=vmin_ratio, vmax=vmax_ratio, 
+    add_cbar(vmin=vmin_choro, vmax=vmax_choro, 
              fig=fig, on_right=True, 
-             col=col, way=None)       
+             cbar_label="part de hôte")       
 
     #legend
     n_levels = 3  # legend 等级数
-    legend_values = np.linspace(vmin_count, vmax_count, n_levels)
+    legend_values = np.linspace(vmin_circle, vmax_circle, n_levels)
     legend_values = np.round(legend_values / 100) * 100
     legend_values = legend_values.astype(int)
-
     print("legend_values:", legend_values)
 
-
-    # legend_values = np.linspace(vmin_count, vmax_count, 3)     
-    # print("legend_values:",legend_values)   
     if not k :            
-            max_marker_area = 5000  # 你视觉上觉得最大的圆
-            k = max_marker_area / vmax_count
+        max_marker_area = 5000  # 你视觉上觉得最大的圆
+        k = max_marker_area / vmax_circle
     circle_handles = [
     plt.scatter(
             [], [],
@@ -701,26 +683,14 @@ def layout_comparison_indep2(dict_gdf_joined, gdf_map,
         )
         for val in legend_values
     ]
+
     
-    
-    # fig.legend(
-    #     handles=circle_handles,
-    #     title='nombre de hôtes',
-    #     loc="upper left",
-    #     frameon=True,
-        
-    #     fontsize=7,          # label 字号
-    #     title_fontsize=8,    # 标题字号
-    #     markerscale=0.8,     # 缩小符号（⭐️/圆）
-    #     handlelength=1.2,    # 色块长度
-    #     labelspacing=0.4,    # 行间距
-    #     borderpad=0.4        # legend 内边距
-    # )
     fig.legend(
         handles=circle_handles,
         title="Nombre",
-        loc="upper left",
-        bbox_to_anchor=(0.03, 0.97),  # ← 左上角留出一块“版面”
+        loc="upper right",
+        bbox_to_anchor=(0.95, 0.95),  # 调整 legend 内部位置
+        # bbox_to_anchor=(0.03, 0.97),  # ← 左上角留出一块“版面”
         frameon=True,
 
         fontsize=9,            # label 字号 ↑
@@ -730,9 +700,6 @@ def layout_comparison_indep2(dict_gdf_joined, gdf_map,
         labelspacing=0.6,      # 行距
         borderpad=0.6          # 内边距
     )
-
-
-    
 
 
 
@@ -786,13 +753,57 @@ def get_groups_gap(dict_gdf_joined, gap_between,
 
     
     
+def add_circle_legend(k, vmin_circle, vmax_circle,fig):
+    #legend
+    n_levels = 3  # legend 等级数
+    legend_values = np.linspace(vmin_circle, vmax_circle, n_levels)
+    legend_values = np.round(legend_values / 100) * 100
+    legend_values = legend_values.astype(int) 
     
+    if not k :            
+        max_marker_area = 5000  # 你视觉上觉得最大的圆
+        k = max_marker_area / vmax_circle
+    
+    circle_handles = [
+    plt.scatter(
+            [], [],
+            s=val * k/50 ,
+            facecolors="none",
+            edgecolors="black",
+            linewidth=1,
+            label=f"{val/50:.2f} hôtes"
+        )
+        for val in legend_values
+    ]
+
+    
+    fig.legend(
+        handles=circle_handles,
+        title="Nombre",
+        loc="upper right",
+        bbox_to_anchor=(0.94, 0.8),  # 调整 legend 内部位置
+        frameon=True,
+
+        fontsize=9,            # label 字号 ↑
+        title_fontsize=10,     # 标题字号 ↑
+        markerscale=1.4,       # 关键：放大圆
+        handlelength=1.6,      # 色块/符号长度
+        labelspacing=0.6,      # 行距
+        borderpad=0.6          # 内边距
+    )
+    return 
+
+
+
+
     
 def get_choropleth_map_gap(dict_gdf_joined, 
             gap_between,
             gdf_map, 
+            gdf_venues, 
             col, way, groupby,
             subtitle,
+            add_buffer_m=None,
             cmap=None, 
             fig=None, subax=None, vmin=None, vmax=None,# optional for single map
             save=False, loc=None, ym=None, # for filename
@@ -801,7 +812,7 @@ def get_choropleth_map_gap(dict_gdf_joined,
 
     df_gap, vmin_gap_current, vmax_gap_current= get_groups_gap(dict_gdf_joined, gap_between,
                       col=col, way=way, groupby=groupby) 
-    display(df_gap.head())
+    # display(df_gap.head())
     # merge back to map:
     gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
 
@@ -838,8 +849,9 @@ def get_choropleth_map_gap(dict_gdf_joined,
     if not subax:# 单图则画cbar 
         add_cbar(vmin=vmin, vmax=vmax, 
                 fig=fig, on_right=True, 
-                col=col, way=way, cmap=cmap)
-    
+                cbar_label=f"{col}({way})", cmap=cmap)
+
+        
     # 坐标与文字：
     for idx, row in gdf_merged.iterrows():
         x = row.geometry.centroid.x
@@ -852,7 +864,22 @@ def get_choropleth_map_gap(dict_gdf_joined,
             fontsize=fontsize_text,
             linespacing=1.2,
         )
-    
+    #--------------------------venues------------------------------
+    if not gdf_venues is None and not gdf_venues.empty:
+        label="Sites olympiques"
+        if add_buffer_m!=None and add_buffer_m!=0:
+            draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer")
+            label=f"Sites olympiques (buffer {add_buffer_m/1000:.1f}km)"
+        
+        # center
+        gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
+        gdf_venues.plot(
+            ax=ax, 
+            markersize=100, 
+            color="blue", 
+            marker="*",
+            label=label
+        )
     ax.set_title(subtitle, fontsize=10, pad=10)# pad btw title & ax
     ax.axis("off")
 

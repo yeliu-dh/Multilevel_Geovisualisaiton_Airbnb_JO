@@ -338,23 +338,40 @@ def add_booking_rate_l30d(df):
 def add_booking_rate_l90d(df, df_nextQ):
     # no match / neg value stay nan in number_of_reviewsQ3
     
+    # 本季度为止累计评论数：number_of_reviews_till_Q
     df_reviews=df.copy()
     df_reviews=df_reviews.rename(columns={"number_of_reviews":'number_of_reviews_till_Q'})
-    
+
+    # 下季度为止累计评论数：number_of_reviews_till_nextQ
     reviews_nextQ=df_nextQ[['id','number_of_reviews']]
     reviews_nextQ.columns=['id','number_of_reviews_till_nextQ']
     
+    # merge
     df_reviews=df_reviews.merge(reviews_nextQ, left_on='id', right_on="id", how="left")
 
+    # 计算本季度获得的评论数：number_of_reviews_nextQ
+    # 下季度无匹配或差值小于0 则number_of_reviews_nextQ为nan    
     df_reviews['number_of_reviews_nextQ']=df_reviews['number_of_reviews_till_nextQ']-df_reviews["number_of_reviews_till_Q"]
     df_reviews['number_of_reviews_nextQ']=df_reviews['number_of_reviews_nextQ'].apply(lambda x : np.nan if x<0 else x)
+        
     print(f"[CHECK] no match on reviews_nextQ : {len(df_reviews[df_reviews['number_of_reviews_nextQ'].isna()])};\n"
-          f"ava90==0: {len(df_reviews[df_reviews['availability_90']==0])}")
-    df_reviews['booking_rate_l90d'] = df_reviews.apply(
-                lambda row: min(row['number_of_reviews_nextQ'] / row['availability_90'], 1.0)
-                if row['availability_90'] > 0 else None,#直接去掉了不开放房东的行！不需要再在ava上drop0
-                axis=1
-            )
+          f"NO ava90 this Q: {len(df_reviews[df_reviews['availability_90']==0])}")
+    
+    #若nextQ为nan，则booking自动为nan
+    # df_reviews['booking_rate_l90d'] = df_reviews.apply(
+    #             lambda row: min(row['number_of_reviews_nextQ'] / row['availability_90'], 1.0)
+    #             if row['availability_90'] > 0 else None, #直接去掉了不开放房东的行！不需要再在ava上drop0
+    #             axis=1
+    #         )
+    
+    #向量化写法，速度更快：
+    df_reviews['booking_rate_l90d'] = (
+    df_reviews['number_of_reviews_nextQ'] / df_reviews['availability_90']
+        ).clip(upper=1.0)
+
+    # 对 availability_90 == 0 或 number_of_reviews_nextQ 为 NaN 的行，也会自然是 NaN
+    df_reviews.loc[df_reviews['availability_90'] == 0, 'booking_rate_l90d'] = np.nan
+
     return df_reviews
 
 
