@@ -2,17 +2,21 @@ import pandas as pd
 import geopandas as gpd
 import os, sys
 import math
+import numpy as np
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import mapclassify
+from matplotlib.cm import get_cmap
+from matplotlib.colors import LinearSegmentedColormap
 
 
-## 参数!=常量？
-
-def read_csv(csv_path):
-    return pd.read_csv(csv_path)
 
 
+    
+    
+    
 def read_gdf(gdf_path):
     gdf=gpd.read_file(gdf_path, encoding='utf-8')
     # print(f"scr :{gdf.crs}\n")
@@ -55,7 +59,6 @@ def df2gdf(df, crs="EPSG:4326",  save=False, output_folder=None, filename=None):
         save_gdf(gdf, outpath_shp)
 
     return gdf
-
 
 
 
@@ -105,8 +108,7 @@ def locate_points(path_listings, path_map, crs="EPSG:4326",
         
     return gdf_joined
 
-    
-    
+
     
     
     
@@ -147,9 +149,10 @@ def get_pts_map(gdf_pts, gdf_map,title=None,
 
 
 
+###=====================================MAPS=============================================================###
 ## ==================================universal=========================================
 
-def get_cmap(vmin, vmax):    
+def get_auto_cmap(vmin, vmax):    
     if vmin>=0:#均为正
         # base = plt.cm.OrRd
         # colors = base(np.linspace(0.1, 0.6, 256))  # 只取中间浅色段
@@ -163,18 +166,21 @@ def get_cmap(vmin, vmax):
     return cmap
 
 
+
 def add_cbar(vmin, vmax, 
             fig, on_right=True, 
             cbar_label=None,
-            cmap=None):
+            cmap=None,
+            ):
     if cmap==None:
-        cmap=get_cmap(vmin, vmax)
+        cmap=get_auto_cmap(vmin, vmax)
         print(f"[CHECK] {vmin:.2f}-{vmax:.2f}=> cmap {cmap}")
     
     sm = mpl.cm.ScalarMappable(
     cmap=cmap,
     norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax)
         )
+    ## 这意味着：连续变量;线性映射;没有“分组”;没有强调分布结构
     
     sm._A = []
     if on_right==True:    
@@ -186,25 +192,186 @@ def add_cbar(vmin, vmax,
         cax=fig.add_axes([0.08, 0.15, 0.02, 0.5])
         
     cbar = fig.colorbar(sm, cax=cax)
-    
-    # cbar_label=""
-    # if col and way  :
-    #     cbar_label=f"{col}({way})"
-    # elif col :
-    #     cbar_label=f"{col}"
-    
+   
     cbar.set_label(cbar_label, fontsize=10)
     cbar.ax.tick_params(labelsize=8)
     # return #  条件赋值 / 间接赋值 / return 会将变量认为是局部变量
 
 
+def build_bounds_norm(
+    scheme,
+    vmin=None,
+    vmax=None,
+    values=None,
+    k_quantile=5,
+    bins=None,
+    cmap="OrRd"
+):
+
+    #传入的cmap(str)要转换成cm格式
+    from matplotlib.cm import get_cmap
+
+    if isinstance(cmap, str):
+        cmap = get_cmap(cmap)
+    elif cmap is None:
+        cmap = plt.cm.viridis
+
+    # --------------------------------------------------
+    # Norm selection:
+    # bounds = 分箱规则
+    # norm = 数值 → 颜色的翻译器
+    # --------------------------------------------------
+    if scheme == "continuous":
+        assert vmin is not None and vmax is not None, \
+            "vmin and vmax must be provided for continuous scheme"
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+        bounds = None
+
+    elif scheme == "quantile":
+        assert values is not None, \
+            "values must be provided for quantile scheme"
+        bounds = np.quantile(values, np.linspace(0, 1, k_quantile+ 1))
+        norm = mpl.colors.BoundaryNorm(boundaries=bounds, ncolors=cmap.N)
+
+    elif scheme == "userdefined":
+        assert bins is not None, \
+            "bins must be provided for custom scheme"
+        bounds = bins
+        norm = mpl.colors.BoundaryNorm(boundaries=bounds, ncolors=cmap.N)
+
+    else:
+        raise ValueError(f"Unknown scheme: {scheme}")
+
+    return bounds, norm
+
+
+
+
+def add_cbar_scheme(
+    fig,
+    # *,
+    scheme="continuous",      # "continuous" | "quantile" | "custom"
+    
+    # 1) continus input
+    vmin=None,
+    vmax=None,
+    # 2) quantile input
+    values=None,              # for scheme quantile
+    k_quantile=5,                      # number of classes for quantile
+    # 3) custom input
+    bins=None,               
+    
+    # layout
+    on_right=True,
+    cbar_label=None,
+    cmap=None,
+    tick_format="{:.2f}"
+    ):
+    
+    print(f"[INFO] cbar takes bounds: {scheme}!")
+    
+    """
+    Flexible colorbar constructor with explicit classification schemes.
+    """
+    
+    bounds, norm=build_bounds_norm(
+        scheme=scheme,
+        vmin=vmin, 
+        vmax=vmax,
+        values=values,
+        k_quantile=k_quantile,
+        bins=bins,
+        cmap=cmap
+    ) 
+        
+    # --------------------------------------------------
+    # ScalarMappable : create cbar 
+    # --------------------------------------------------
+    sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm._A = []
+
+    # --------------------------------------------------
+    # position of cbar
+    # --------------------------------------------------
+    if on_right:
+        cax = fig.add_axes([0.90, 0.15, 0.02, 0.5])
+    else:
+        cax = fig.add_axes([0.08, 0.15, 0.02, 0.5])
+
+    # --------------------------------------------------
+    # Colorbar
+    # --------------------------------------------------
+    if bounds is None:
+        cbar = fig.colorbar(sm, cax=cax)
+    else:
+        cbar = fig.colorbar(
+            sm,
+            cax=cax,
+            boundaries=bounds,
+            ticks=bounds
+        )
+        cbar.ax.set_yticklabels([tick_format.format(b) for b in bounds])
+
+    cbar.set_label(cbar_label, fontsize=10)
+    cbar.ax.tick_params(labelsize=8)
+
+    return cbar
+
+
+
+def add_circle_legend(k, vmin_circle, vmax_circle,fig):
+    #legend
+    n_levels = 3  # legend 等级数
+    legend_values = np.linspace(vmin_circle, vmax_circle, n_levels)
+    legend_values = np.round(legend_values / 100) * 100
+    legend_values = legend_values.astype(int) 
+    
+    if not k :            
+        max_marker_area = 5000  # 你视觉上觉得最大的圆
+        k = max_marker_area / vmax_circle
+    
+    circle_handles = [
+    plt.scatter(
+            [], [],
+            s=val * k/50 ,
+            facecolors="none",
+            edgecolors="black",
+            linewidth=1,
+            label=f"{val/50:.2f} hôtes"
+        )
+        for val in legend_values
+    ]
+    return circle_handles
+
+
+def add_legend(fig, k, vmin_circle, vmax_circle,
+               ):
+    
+    circle_handles=add_circle_legend(k, vmin_circle, vmax_circle,fig)
+    
+    fig.legend(
+        handles=circle_handles,
+        title="Nombre",
+        loc="upper right",
+        bbox_to_anchor=(0.94, 0.8),  # 调整 legend 内部位置
+        frameon=True,
+
+        fontsize=9,            # label 字号 ↑
+        title_fontsize=10,     # 标题字号 ↑
+        markerscale=1.4,       # 关键：放大圆
+        handlelength=1.6,      # 色块/符号长度
+        labelspacing=0.6,      # 行距
+        borderpad=0.6          # 内边距
+    )
 
 
 
 
 
-def get_groups (gdf_joined, col, way, groupby):
 
+##====================================STATS====================================
+
+def get_groups(gdf_joined, col, way, groupby):
     ## 1/3 ways 
     ways =["count", "mean","sum"]
     if way not in ways :
@@ -225,12 +392,9 @@ def get_groups (gdf_joined, col, way, groupby):
                 # way=(col, way) #简写无法动态取way的值 
         )
          
-    vmin= groups[way].min()
-    vmax= groups[way].max()
-    return groups, vmin, vmax
-
-
-
+    # vmin= groups[way].min()
+    # vmax= groups[way].max()
+    return groups
 
 
 
@@ -242,57 +406,101 @@ def get_choropleth_map(gdf_joined,
             gdf_venues,
             gdf_map, 
             col, way, groupby,
-            subtitle=None,
-            fig=None, subax=None, vmin=None, vmax=None,# oblig for subplot
-            save=False, loc=None, ym=None, 
+            title=None,
+        
+            fig=None, subax=None, vmin=None, vmax=None,values=None,bins=None,  #oblig for subplots   
+            scheme='quantile', k_quantile=10, cmap="OrRd", # colors
+            
+            save=False, loc=None, ym=None,# for automatic filename 
             output_folder=None,filename=None
         ):
-    
-    
-    # ##input :
-    # gdf_joined=gpd.read_file(path_gdf_joined)
-    # gdf_map=gpd.read_file(path_gdf_map)
-    
     # agg
-    groups, vmin_current, vmax_current =get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
+    groups =get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
     # display(groups)
     
     # merge back to gdf_map
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
-
+    
+      
     #----------------------------plot-----------------------------
-    if not subax: 
-        # 单图:打开cbar，单独ax，取当前vmin，vmax
+    if not subax: # 单图:打开cbar，单独ax，取当前vmin，vmax
         fontsize_text=8 
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-        vmin, vmax=vmin_current, vmax_current
-    else :
-        #外部大图
+        vmin, vmax=groups[way].min(),groups[way].max()
+        values=groups[way].dropna().values
+        
+        # same color for map and cbar:
+        bounds, norm=build_bounds_norm(
+            scheme=scheme,
+            vmin=vmin,
+            vmax=vmax,
+            values=values,
+            k_quantile=5,
+            bins=bins,
+            cmap=cmap
+        )
+        
+        # add color to map :  
+        gdf_merged.plot(
+            column=way,
+            ax=ax,
+            # vmin=vmin,
+            # vmax=vmax,
+            legend=False,
+            norm=norm,
+            cmap=cmap,
+            edgecolor="black",
+            linewidth=0.5
+        )
+        
+        # show cbar:
+        add_cbar_scheme(
+            fig,
+            scheme=scheme,      # "continuous" | "quantile" | "custom"
+            # 1) continus input
+            vmin=vmin,
+            vmax=vmax,
+            # 2) quantile input
+            values=values,              # for scheme quantile
+            k_quantile=k_quantile,                      # number of classes for quantile
+            # 3) custom input
+            bins=bins,              
+            
+            # layout
+            on_right=True,
+            cbar_label=f"{col} ({way})",
+            cmap=cmap,
+            tick_format="{:.2f}"
+        )       
+        
+    
+    else :#小图
         fontsize_text=5
         ax=subax
-
         
-    ## color the map:
-    cmap=get_cmap(vmin, vmax)
-    # print(f"[CHECK] cmap {cmap} for vlaues btw {vmin}-{vmax}!")
+        # # V2:
+        ## same bounds for gdf plot and cbar!!!
+        bounds, norm=build_bounds_norm(
+            scheme=scheme,
+            vmin=vmin,
+            vmax=vmax,
+            values=values,
+            k_quantile=k_quantile,
+            bins=bins,
+            cmap=cmap
+        )
+        gdf_merged.plot(
+            column=way,
+            ax=ax,
+            legend=False,
+            norm=norm,
+            cmap=cmap,
+            edgecolor="black",
+            linewidth=0.5
+        )
 
-    gdf_merged.plot(
-        column=way,
-        ax=ax,
-        vmin=vmin,
-        vmax=vmax,
-        legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
-        cmap=cmap,       
-        edgecolor="black",
-        linewidth=0.5
-    ) 
-    
-    if not subax: 
-        add_cbar(vmin=vmin, vmax=vmax, 
-             fig=fig, on_right=True, 
-             cbar_label=f"{col}({way})", cmap=cmap)
-    
-    
+
+    # ========================SAME======================= 
     # 坐标与文字：
     for idx, row in gdf_merged.iterrows():
         x = row.geometry.centroid.x
@@ -305,8 +513,7 @@ def get_choropleth_map(gdf_joined,
             fontsize=fontsize_text,
             linespacing=1.2,
         )
-        
-        
+    
     if gdf_venues is not None and not gdf_venues.empty:#不为none且不为空        
         # center
         gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
@@ -317,12 +524,11 @@ def get_choropleth_map(gdf_joined,
             marker="*",
             label="Main Venue"
         )
-
     
-    ax.set_title(subtitle, fontsize=10, pad=10)# pad btw title & ax
+    ax.set_title(title, fontsize=10, pad=10)# pad btw title & ax
     ax.axis("off")
     
-    
+
     # 非子图，由outpath才保存
     if not ax and save and output_folder:
         os.makedirs(output_folder, exist_ok=True)
@@ -342,20 +548,29 @@ def get_choropleth_map(gdf_joined,
 def layout_comparison_indep(dict_gdf_joined, gdf_map,
                 gdf_venues,
                 col, way, groupby,
+                scheme, vmin, vmax, k_quantile, bins, cmap,
                 suptitle, loc, # for filename
-                n_axes, n_cols=3,#每行最多几张（列）
+                n_axes=3, n_cols=3,#每行最多几张（列）
                 save=False, output_folder=None, filename=None):
     
-    # vmin & vmax
-    vmin, vmax=0,0
-    for ym, gdf_joined in dict_gdf_joined.items():
-        groups, vmin_current, vmax_current=get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
-        if vmin> vmin_current:
-            vmin=vmin_current
-        vmax_current= groups[way].max()
-        if vmax < vmax_current:
-            vmax=vmax_current
+    # overall vmin & vmax & values
+    if not vmin and not vmax:     
+        vmin, vmax=0,0
+        values=[]        
+        for ym, gdf_joined in dict_gdf_joined.items():
+            groups=get_groups(gdf_joined=gdf_joined, col=col, way=way, groupby=groupby)
+            vmin_current= groups[way].min()
+            vmax_current=groups[way].max()
+            values_current=groups[way]
+            values.extend(values_current)
+            
+            if vmin>vmin_current:
+                vmin=vmin_current
+            vmax_current= groups[way].max()
+            if vmax < vmax_current:
+                vmax=vmax_current
     # print(f"[INFO] vmin-vmax: {vmin}-{vmax}!")
+    
     
     
     # axes
@@ -363,34 +578,50 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
     fig, axes = plt.subplots(
         n_rows,
         n_cols,
-        figsize=(6* n_cols, 4 * n_rows)
+        figsize=(6* n_cols, 5 * n_rows)
     )
     axes = axes.flatten()
-    print (f"[INFO] compa indep layout: {n_rows} rows x {n_cols} cols\n")
 
-    # plot
+    # --------------------------plot-----------------------------    
     i=0
-    for ym, gdf_joined in dict_gdf_joined.items():
+    for subtitle_ym, gdf_joined in dict_gdf_joined.items():
         get_choropleth_map(gdf_joined=gdf_joined, 
-            gdf_map=gdf_map, 
             gdf_venues=gdf_venues,
+            gdf_map=gdf_map, 
             col=col, way=way, groupby=groupby,
-            subtitle=ym,
-            fig=fig, subax=axes[i], vmin=vmin, vmax=vmax,
-            save=False, loc=loc, ym=ym, 
+            title=subtitle_ym,
+        
+            fig=fig, subax=axes[i], vmin=vmin, vmax=vmax,values=values, bins=None,  #oblig for subplots   
+            scheme='quantile', k_quantile=10, cmap=cmap, # colors
+            
+            save=False, loc=None, ym=None,# for automatic filename 
             output_folder=None,filename=None
         )
-        i+=1
-        
+
+        i+=1   
     #shut down
     for j in range(i, len(axes)):
          axes[j].axis("off")
                  
-    # add cbar
-    add_cbar(vmin, vmax, 
-             fig, on_right=True, 
-             cbar_label=f"{col}({way})")# camp?
-           
+    # add cbar_scheme: same vmin/vmax/values as map
+    add_cbar_scheme(
+        fig,
+        scheme=scheme,      # "continuous" | "quantile" | "custom"        
+        # 1) continus input
+        vmin=vmin,
+        vmax=vmax,
+        # 2) quantile input
+        values=values,              # for scheme quantile
+        k_quantile=k_quantile,                      # number of classes for quantile
+        # 3) custom input
+        bins=bins,               
+        # layout
+        on_right=True,
+        cbar_label=f"{col} ({way})",
+        cmap=cmap,
+        tick_format="{:.2f}"
+    )
+    
 
     # 大标题：
     plt.suptitle(
@@ -416,6 +647,282 @@ def layout_comparison_indep(dict_gdf_joined, gdf_map,
     return
 
 
+
+
+
+
+###===================================GAP========================================
+
+def get_groups_gap(dict_gdf_joined, gap_between,
+                      col, way, groupby):
+    
+    dict_gdf_gap={
+        ym: dict_gdf_joined[ym]
+        for ym in gap_between
+    }
+    groups_for_gap=[]
+    for ym, gdf_joined in dict_gdf_gap.items():
+        groups= get_groups(gdf_joined, col=col, way=way, groupby=groupby)
+        groups_for_gap.append(groups)               
+        
+    df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
+    df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
+    
+    # vmin_gap_current=df_gap['gap'].min()
+    # vmax_gap_current=df_gap['gap'].max()
+
+    return df_gap
+    
+    
+
+    
+def get_choropleth_map_gap(dict_gdf_joined, 
+            gap_between,
+            gdf_map, 
+            gdf_venues, 
+            col, way, groupby,
+            title='Gap map',
+            add_buffer_m=None,
+            fig=None, subax=None, vmin=None, vmax=None,values=None,bins=None,  #oblig for subplots   
+            scheme='quantile', k_quantile=10, cmap="OrRd", # colors
+            save=False, loc=None, ym=None, # for filename
+            output_folder=None,filename=None
+        ):    
+
+    df_gap= get_groups_gap(dict_gdf_joined, gap_between,
+                      col=col, way=way, groupby=groupby) 
+    
+    # merge
+    gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
+
+
+    #----------------------------plot-----------------------------
+    if not subax:        # 单图:打开cbar，单独ax，取当前vmin，vmax(无外部输入)
+
+        fontsize_text=8 
+        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+        # vmin, vmax=vmin_gap_current, vmax_gap_current
+
+        vmin, vmax, values = df_gap['gap'].min(), df_gap['gap'].max() ,df_gap['gap']
+        
+        
+        # same color for map and cbar:
+        bounds, norm=build_bounds_norm(
+            scheme=scheme,
+            vmin=vmin,
+            vmax=vmax,
+            values=values,
+            k_quantile=5,
+            bins=bins,
+            cmap=cmap
+        )
+        
+        # add color to map :  
+        gdf_merged.plot(
+            column='gap',
+            ax=ax,
+            # vmin=vmin,
+            # vmax=vmax,
+            legend=False,
+            norm=norm,
+            cmap=cmap,
+            edgecolor="black",
+            linewidth=0.5
+        )
+        
+        # show cbar:
+        add_cbar_scheme(
+            fig,
+            scheme=scheme,      # "continuous" | "quantile" | "custom"
+            # 1) continus input
+            vmin=vmin,
+            vmax=vmax,
+            # 2) quantile input
+            values=values,              # for scheme quantile
+            k_quantile=k_quantile,                      # number of classes for quantile
+            # 3) custom input
+            bins=bins,              
+            
+            # layout
+            on_right=True,
+            cbar_label=f"écart de {col} ",
+            cmap=cmap,
+            tick_format="{:.2f}"
+        )            
+
+    
+    else : # 小图
+        fontsize_text=5
+        ax=subax
+        
+        ## same bounds for gdf plot and cbar!!!
+        bounds, norm=build_bounds_norm(
+            scheme=scheme,
+            vmin=vmin,
+            vmax=vmax,
+            values=values,
+            k_quantile=k_quantile,
+            bins=bins,
+            cmap=cmap
+        )
+        gdf_merged.plot(
+            column='gap',
+            ax=ax,
+            legend=False,
+            norm=norm,
+            cmap=cmap,
+            edgecolor="black",
+            linewidth=0.5
+        )
+
+        
+    # 坐标与文字：
+    
+    for idx, row in gdf_merged.iterrows():
+        x = row.geometry.centroid.x
+        y = row.geometry.centroid.y
+        if row["gap"]>=0:
+            gap_label=f"+ {row['gap']:.2f}"
+        else :
+            gap_label=f"- {row['gap']:.2f}"
+        
+        ax.text(
+            x, y,
+            f"{int(row[groupby])} arr :\n{gap_label}",#*
+            ha="center",
+            va="center",
+            fontsize=fontsize_text,
+            linespacing=1.2,
+        )
+        
+    #--------------------------venues------------------------------
+    if not gdf_venues is None and not gdf_venues.empty:
+        label="Sites olympiques"
+        if add_buffer_m!=None and add_buffer_m!=0:
+            draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer")
+            label=f"Sites olympiques (buffer {add_buffer_m/1000:.1f}km)"
+        
+        # center
+        gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
+        gdf_venues.plot(
+            ax=ax, 
+            markersize=100, 
+            color="blue", 
+            marker="*",
+            label=label
+        )
+    ax.set_title(title, fontsize=10, pad=10)# pad btw title & ax
+    ax.axis("off")
+
+    
+    # SAVE: 非子图，由outpath才保存
+    if not subax and save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        if not filename:        
+            filename=f"gap_map_{col}_{way}_{loc}{'-'.join(gap_between)}.jpg"
+        outpath_fig=os.path.join(output_folder,filename)   
+        fig.savefig(outpath_fig, dpi=300)      
+        print(f"✔ [SAVE]  choropleth gap map saved to {outpath_fig}!")
+        plt.show()
+    
+    return
+
+
+
+
+def layout_comparison_gap(dict_gdf_joined, 
+                gdf_map,
+                gdf_venues=None,add_buffer_m=None,
+                gap_groups=[['T1 2024', "T2 2024"], ["T1 2024","T3 2024"]],
+                col=None, way=None, groupby=None,
+                scheme="quantile", vmin=None, vmax=None, k_quantile=10, bins=None, cmap="orRd",
+                suptitle='gap comparaison', loc="Paris", # for filename
+                n_axes=2, n_cols=3,#每行最多几张（列）
+                save=False, output_folder=None, filename=None):
+    
+    # overall vmin & vmax & values
+    vmin, vmax, values =0, 0, []
+    for gap_between in gap_groups:
+        df_gap= get_groups_gap(dict_gdf_joined, gap_between,
+                        col=col, way=way, groupby=groupby) 
+        vmin_current, vmax_current,values_current = df_gap['gap'].min(), df_gap['gap'].max(),df_gap['gap']
+
+        if vmin > vmin_current:
+            vmin=vmin_current
+        if vmax < vmax_current:
+                vmax=vmax_current
+        values.extend(values_current)
+        
+        
+    # axes
+    n_rows = math.ceil(n_axes / n_cols)
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(6* n_cols, 5 * n_rows)
+    )
+    axes = axes.flatten()
+    
+    
+    i=0
+    for i, gap_between in enumerate(gap_groups):
+        get_choropleth_map_gap(dict_gdf_joined=dict_gdf_joined, 
+                gap_between=gap_between,
+                gdf_map=gdf_map, 
+                gdf_venues=gdf_venues, 
+                col=col, way=way, groupby=groupby,
+                title=f'Evolution de {col} ({way}) du {gap_between[0]} au {gap_between[1]} à {loc}',
+                add_buffer_m=add_buffer_m,
+                fig=fig, subax=axes[i], vmin=vmin, vmax=vmax,values=values,bins=bins,  #oblig for subplots   
+                scheme=scheme, k_quantile=k_quantile, cmap=cmap, # colors
+                # save=False, loc=None, ym=None, # for filename
+                # output_folder=None,filename=None
+            )
+    for j in range(i, len(axes)):
+         axes[j].axis("off")    
+               
+    # add cbar_scheme: same vmin/vmax/values as map
+    add_cbar_scheme(
+        fig,
+        scheme=scheme,      # "continuous" | "quantile" | "custom"        
+        # 1) continus input
+        vmin=vmin,
+        vmax=vmax,
+        # 2) quantile input
+        values=values,              # for scheme quantile
+        k_quantile=k_quantile,                      # number of classes for quantile
+        # 3) custom input
+        bins=bins,               
+        # layout
+        on_right=True,
+        cbar_label=f"{col} ({way})",
+        cmap=cmap,
+        tick_format="{:.2f}"
+    )
+      # 大标题：
+    plt.suptitle(
+            suptitle,
+            fontsize=20,
+            fontweight="bold",
+            # y=0.98
+        )
+    
+    # plt.tight_layout() #layout会压缩到cbar！   
+    
+    #save
+    if save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        if not filename:
+            filename=f"gap_comparaison_{col}_{way}_{loc}-{'-'.join(dict_gdf_joined.keys())}.jpg"
+        outpath_fig=os.path.join(output_folder,filename)   
+        fig.savefig(outpath_fig, dpi=300)      
+        print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    
+    plt.show()     
+        
+        
+    return    
+   
 
 
 
@@ -449,10 +956,6 @@ def draw_buffer(ax, gdf_points, buffer_dist=3000, buffer_label="Venue buffer"):
     return #gdf_buffer
 
 
-import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
 
 
 def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None, 
@@ -570,6 +1073,125 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
     # plt.show()
   
     return plt
+
+
+
+
+# def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None, 
+#             col_choropleth="ratio", col_circle="count", 
+#             groupby="c_ar",
+#             vmin_choro=None, vmax_choro=None, 
+#             vmin_circle=None, vmax_circle=None, 
+#             fig=None, subax=None,
+#             k=None,cmap=None,
+#             title_cbar="Part des hôtes réactifs",
+#             title="Part des hôtes réactifs par arrondissement et localisation des sites olympiques"
+#         ):
+#     print(f"[input] CIRCLE (COUNT) vmin vmax :{vmin_circle}-{vmax_circle}")
+
+#     if cmap==None:    
+#         base = plt.cm.OrRd
+#         colors = base(np.linspace(0.2, 0.7, 256))  # 只取中间浅色段
+#         cmap_light = LinearSegmentedColormap.from_list("OrRd_light", colors)
+#         cmap=cmap_light
+   
+#     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
+#     # display(gdf_merged)
+    
+    
+#     if not subax:
+#         fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+#     else :
+#         ax=subax
+        
+        
+#     # -------------------------choropleth-------------------------------
+#     if col_choropleth:
+#         if not subax and  vmin_choro is None and vmax_choro is None:
+#             vmin_choro=groups[col_choropleth].min()
+#             vmax_choro=groups[col_choropleth].max()
+#             print("vmin vmax of current groups:", vmin_choro, vmax_choro)
+#         else :
+#             print(f"[input] CHORO (RATIO) vmin vmax :{vmin_choro}-{vmax_choro}")
+        
+#         gdf_merged.plot(
+#             column=col_choropleth,
+#             ax=ax,
+#             vmin=vmin_choro,
+#             vmax=vmax_choro,
+#             legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
+#             cmap=cmap,       
+#             edgecolor="black",
+#             linewidth=0.5
+#         ) 
+
+#         # 坐标与文字：
+#         for idx, row in gdf_merged.iterrows():
+#             x = row.geometry.centroid.x
+#             y = row.geometry.centroid.y
+#             ax.text(
+#                 x, y,
+#                 f"{int(row[groupby])} arr\n{row[col_choropleth]*100:.1f}%",
+#                 ha="center",
+#                 va="center",
+#                 fontsize=8,
+#                 linespacing=1.2,
+#             )
+#         if not subax: 
+#             add_cbar(vmin=vmin_choro, vmax=vmax_choro, 
+#                 fig=fig, on_right=True, 
+#                 cbar_label='proportion de hôte', cmap=cmap)
+
+#     #----------------------porportional circle--------------------
+#     if col_circle:
+#         if not vmin_circle and not vmax_circle :
+#             vmin_circle=groups[col_circle].min()
+#             vmax_circle=groups[col_circle].max()
+            
+#         if not k :            
+#             max_marker_area = 5000  # 你视觉上觉得最大的圆
+#             k = max_marker_area / vmax_circle
+#             print(f"suitable k : {k}!")
+
+#         # k = 5  # 缩放因子，按效果调
+#         centroids = gdf_merged.geometry.centroid
+#         ax.scatter(
+#             centroids.x,
+#             centroids.y,
+#             s = gdf_merged[col_circle] * k,   # ← 可替换
+#             facecolors="none",
+#             edgecolors="black",
+#             linewidth=1,
+#             zorder=2
+#         )   
+#         if not subax:        
+#             add_circle_legend(k=5, vmin_circle=vmin_circle, vmax_circle=vmax_circle,fig=fig)
+            
+        
+    
+#     #--------------------------venues------------------------------
+#     if not gdf_venues is None and not gdf_venues.empty:
+#         label="Sites olympiques"
+#         if add_buffer_m!=None and add_buffer_m!=0:
+#             draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer")
+#             label=f"Sites olympiques (buffer {add_buffer_m/1000:.1f}km)"
+        
+#         # center
+#         gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
+#         gdf_venues.plot(
+#             ax=ax, 
+#             markersize=100, 
+#             color="blue", 
+#             marker="*",
+#             label=label
+#         )
+#     #-------------------------titile------------------------
+#     ax.set_title(title, fontsize=10, pad=10)# pad btw title & ax
+#     ax.axis("off")
+#     # ax.legend()
+#     # plt.show()
+  
+#     return plt
 
 
 
@@ -727,294 +1349,125 @@ def layout_comparison_indep2(dict_gdf_joined, gdf_map,
 
 
 
+ 
 
-
-###===================================GAP========================================
-
-def get_groups_gap(dict_gdf_joined, gap_between,
-                      col, way, groupby):
-    
-    dict_gdf_gap={
-        ym: dict_gdf_joined[ym]
-        for ym in gap_between
-    }
-    groups_for_gap=[]
-    for ym, gdf_joined in dict_gdf_gap.items():
-        groups, vmin_current, vmax_current= get_groups(gdf_joined, col=col, way=way, groupby=groupby)
-        groups_for_gap.append(groups)               
-        
-    df_gap=groups_for_gap[0].merge(groups_for_gap[1], left_on=groupby, right_on=groupby, how='left')
-    df_gap['gap']=df_gap[f'{way}_y']-df_gap[f'{way}_x']
-    
-    vmin_gap_current=df_gap['gap'].min()
-    vmax_gap_current=df_gap['gap'].max()
-
-    return df_gap, vmin_gap_current, vmax_gap_current
-
+# def layout_comparison_gap (dict_gdf_joined, gdf_map,
+#                         ym_key,
+#                         col, way, groupby,
+#                         n_axes, n_cols=3,
+#                         gdf_venues=None,
+#                         suptitle=None, loc=None,#for filename
+#                         save=False, output_folder="../output_map",
+#                         filename=None
+#                         ):
+#     ## experimental group : 2406 ; control groups 2403, 2409 
+#     # 只能有一个实验组，其余均是对照组？
     
     
-def add_circle_legend(k, vmin_circle, vmax_circle,fig):
-    #legend
-    n_levels = 3  # legend 等级数
-    legend_values = np.linspace(vmin_circle, vmax_circle, n_levels)
-    legend_values = np.round(legend_values / 100) * 100
-    legend_values = legend_values.astype(int) 
+#     ## ------------------------------vmin vmax-----------------------------------
+#     # key  
+#     groups_density = get_groups(gdf_joined=dict_gdf_joined[ym_key],
+#             col=col, way=way, groupby=groupby)
     
-    if not k :            
-        max_marker_area = 5000  # 你视觉上觉得最大的圆
-        k = max_marker_area / vmax_circle
-    
-    circle_handles = [
-    plt.scatter(
-            [], [],
-            s=val * k/50 ,
-            facecolors="none",
-            edgecolors="black",
-            linewidth=1,
-            label=f"{val/50:.2f} hôtes"
-        )
-        for val in legend_values
-    ]
+#     # ref        
+#     ym_refs=[i for i in dict_gdf_joined.keys() if i !=ym_key]    
 
-    
-    fig.legend(
-        handles=circle_handles,
-        title="Nombre",
-        loc="upper right",
-        bbox_to_anchor=(0.94, 0.8),  # 调整 legend 内部位置
-        frameon=True,
-
-        fontsize=9,            # label 字号 ↑
-        title_fontsize=10,     # 标题字号 ↑
-        markerscale=1.4,       # 关键：放大圆
-        handlelength=1.6,      # 色块/符号长度
-        labelspacing=0.6,      # 行距
-        borderpad=0.6          # 内边距
-    )
-    return 
-
-
-
-
-    
-def get_choropleth_map_gap(dict_gdf_joined, 
-            gap_between,
-            gdf_map, 
-            gdf_venues, 
-            col, way, groupby,
-            subtitle,
-            add_buffer_m=None,
-            cmap=None, 
-            fig=None, subax=None, vmin=None, vmax=None,# optional for single map
-            save=False, loc=None, ym=None, # for filename
-            output_folder=None,filename=None
-        ):    
-
-    df_gap, vmin_gap_current, vmax_gap_current= get_groups_gap(dict_gdf_joined, gap_between,
-                      col=col, way=way, groupby=groupby) 
-    # display(df_gap.head())
-    # merge back to map:
-    gdf_merged = gdf_map.merge(df_gap, on=groupby, how="left")
-
-
-    #----------------------------plot-----------------------------
-
-    if not subax:
-        fontsize_text=8 
-        # 单图:打开cbar，单独ax，取当前vmin，vmax(无外部输入)
-        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-        vmin, vmax=vmin_gap_current, vmax_gap_current
-
-    else : 
-        fontsize_text=5
-        ax=subax
-
-
-    ## color the map:
-    if not cmap:
-        cmap=get_cmap(vmin, vmax)
-    # print(f"[CHECK] cmap '{cmap}' for vlaues btw {vmin}-{vmax}!")
-
-    gdf_merged.plot(
-        column='gap',#*
-        ax=ax,
-        vmin=vmin,
-        vmax=vmax,
-        legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
-        cmap=cmap,       
-        edgecolor="black",
-        linewidth=0.5
-    ) 
-    
-    if not subax:# 单图则画cbar 
-        add_cbar(vmin=vmin, vmax=vmax, 
-                fig=fig, on_right=True, 
-                cbar_label=f"{col}({way})", cmap=cmap)
-
-        
-    # 坐标与文字：
-    for idx, row in gdf_merged.iterrows():
-        x = row.geometry.centroid.x
-        y = row.geometry.centroid.y
-        ax.text(
-            x, y,
-            f"{int(row[groupby])} arr :\n{row['gap']:.2f}",#*
-            ha="center",
-            va="center",
-            fontsize=fontsize_text,
-            linespacing=1.2,
-        )
-    #--------------------------venues------------------------------
-    if not gdf_venues is None and not gdf_venues.empty:
-        label="Sites olympiques"
-        if add_buffer_m!=None and add_buffer_m!=0:
-            draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer")
-            label=f"Sites olympiques (buffer {add_buffer_m/1000:.1f}km)"
-        
-        # center
-        gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
-        gdf_venues.plot(
-            ax=ax, 
-            markersize=100, 
-            color="blue", 
-            marker="*",
-            label=label
-        )
-    ax.set_title(subtitle, fontsize=10, pad=10)# pad btw title & ax
-    ax.axis("off")
-
-    
-    # 非子图，由outpath才保存
-    if not subax and save and output_folder:
-        os.makedirs(output_folder, exist_ok=True)
-        if not filename:        
-            filename=f"gap_map_{col}_{way}_{loc}{'-'.join(gap_between)}.jpg"
-        outpath_fig=os.path.join(output_folder,filename)   
-        fig.savefig(outpath_fig, dpi=300)      
-        print(f"✔ [SAVE]  choropleth gap map saved to {outpath_fig}!")
-        plt.show()
-    
-    return
-
-    
-    
-def layout_comparison_gap (dict_gdf_joined, gdf_map,
-                        ym_key,
-                        col, way, groupby,
-                        n_axes, n_cols=3,
-                        gdf_venues=None,
-                        suptitle=None, loc=None,#for filename
-                        save=False, output_folder="../output_map",
-                        filename=None
-                        ):
-    ## experimental group : 2406 ; control groups 2403, 2409 
-    # 只能有一个实验组，其余均是对照组？
-    
-    
-    ## ------------------------------vmin vmax-----------------------------------
-    # key  
-    groups_density, vmin_density, vmax_density = get_groups(gdf_joined=dict_gdf_joined[ym_key],
-            col=col, way=way, groupby=groupby)
-    
-    # ref        
-    ym_refs=[i for i in dict_gdf_joined.keys() if i !=ym_key]    
-
-    vmin_gap, vmax_gap=0,0
-    for ym_ref in ym_refs:    
-        df_gap, vmin_gap_current, vmax_gap_current=get_groups_gap(dict_gdf_joined, 
-                    gap_between=[ym_key, ym_ref],
-                    col=col, way=way, groupby=groupby)
-        if vmin_gap> vmin_gap_current:
-            vmin_gap=vmin_gap_current
-        if vmax_gap < vmax_gap_current:
-            vmax_gap=vmax_gap_current
+#     vmin_gap, vmax_gap=0,0
+#     for ym_ref in ym_refs:    
+#         df_gap, vmin_gap_current, vmax_gap_current=get_groups_gap(dict_gdf_joined, 
+#                     gap_between=[ym_key, ym_ref],
+#                     col=col, way=way, groupby=groupby)
+#         if vmin_gap> vmin_gap_current:
+#             vmin_gap=vmin_gap_current
+#         if vmax_gap < vmax_gap_current:
+#             vmax_gap=vmax_gap_current
                    
-    # print(f"[INFO] vmin_density:{vmin_density}, vmax_density:{vmax_density} ")
-    # print(f"[INFO]OVERALL vmin_gap :{vmin_gap}, OVERALL vmax_gap:{vmax_gap}!\n")
+#     # print(f"[INFO] vmin_density:{vmin_density}, vmax_density:{vmax_density} ")
+#     # print(f"[INFO]OVERALL vmin_gap :{vmin_gap}, OVERALL vmax_gap:{vmax_gap}!\n")
                 
     
    
-    # #-----------------------------axes--------------------------------    
-    ## layout axes
-    n_rows = math.ceil(n_axes / n_cols)
-    fig, axes = plt.subplots(
-        n_rows,
-        n_cols,
-        figsize=(10* n_cols, 8* n_rows)
-    )
-    axes = axes.flatten()
-    print (f"[INFO] compa gap layout: {n_rows} rows x {n_cols} cols\n")
+#     # #-----------------------------axes--------------------------------    
+#     ## layout axes
+#     n_rows = math.ceil(n_axes / n_cols)
+#     fig, axes = plt.subplots(
+#         n_rows,
+#         n_cols,
+#         figsize=(10* n_cols, 8* n_rows)
+#     )
+#     axes = axes.flatten()
+#     print (f"[INFO] compa gap layout: {n_rows} rows x {n_cols} cols\n")
 
     
-    ## -----------------------------plot--------------------------------
-    i=0
-    for ym, gdf_joined in dict_gdf_joined.items():
-        if ym ==ym_key:#中间正常显示值 
-            get_choropleth_map(gdf_joined=gdf_joined, 
-                gdf_map=gdf_map, 
-                gdf_venues=gdf_venues,
-                col=col, way=way, groupby=groupby,
-                subtitle=ym,
-                fig=fig, subax=axes[i], vmin=vmin_density, vmax=vmax_density,# oblig for subplot
-                save=False, loc=loc, ym=ym, 
-                output_folder=None,filename=None
-            )      
+#     ## -----------------------------plot--------------------------------
+#     i=0
+#     for ym, gdf_joined in dict_gdf_joined.items():
+#         if ym ==ym_key:#中间正常显示值 
+#             get_choropleth_map(gdf_joined=gdf_joined, 
+#                 gdf_map=gdf_map, 
+#                 gdf_venues=gdf_venues,
+#                 col=col, way=way, groupby=groupby,
+#                 subtitle=ym,
+#                 fig=fig, subax=axes[i], vmin=vmin_density, vmax=vmax_density,# oblig for subplot
+#                 save=False, loc=loc, ym=ym, 
+#                 output_folder=None,filename=None
+#             )      
         
-        else : #参照组显示gap             
-            gap_between=[ym_key, ym]#key放前面,x的位置!                     
-            get_choropleth_map_gap(dict_gdf_joined, 
-                    gap_between=gap_between,
-                    gdf_map=gdf_map, 
-                    col=col, way=way, groupby=groupby,
-                    subtitle=f"{ym} comparé au {ym_key}",
-                    fig=fig, subax=axes[i], 
-                    vmin=vmin_gap, vmax=vmax_gap,# optionel
-                    save=False, loc=loc, ym=ym, 
-                    output_folder=None,filename=None
-                )                    
-        i+=1
+#         else : #参照组显示gap             
+#             gap_between=[ym_key, ym]#key放前面,x的位置!                     
+#             get_choropleth_map_gap(dict_gdf_joined, 
+#                     gap_between=gap_between,
+#                     gdf_map=gdf_map, 
+#                     col=col, way=way, groupby=groupby,
+#                     subtitle=f"{ym} comparé au {ym_key}",
+#                     fig=fig, subax=axes[i], 
+#                     vmin=vmin_gap, vmax=vmax_gap,# optionel
+#                     save=False, loc=loc, ym=ym, 
+#                     output_folder=None,filename=None
+#                 )                    
+#         i+=1
     
-    # shutdown else
-    for j in range(i, len(axes)):
-         axes[j].axis("off")
-    
-    
-    #--------------------------------cbar---------------------------------#
-    
-    # # 已经在_ax中给map画了在vmin， vmax范围内的color
-    ## 左边 cbar_gap
-    add_cbar(vmin=vmin_gap, vmax=vmax_gap, 
-             fig=fig, on_right=False, 
-             col=col, way='gap')
-    
-    # 右边cbar_density
-    add_cbar(vmin=vmin_density, vmax=vmax_density, 
-             fig=fig, on_right=True, 
-             col=col, way=way)   
+#     # shutdown else
+#     for j in range(i, len(axes)):
+#          axes[j].axis("off")
     
     
-    # suptitle：
-    plt.suptitle(
-            suptitle,
-            fontsize=20,
-            fontweight="bold",
-            # y=0.98
-        )
+#     #--------------------------------cbar---------------------------------#
+    
+#     # # 已经在_ax中给map画了在vmin， vmax范围内的color
+#     ## 左边 cbar_gap
+#     add_cbar(vmin=vmin_gap, vmax=vmax_gap, 
+#              fig=fig, on_right=False, 
+#              col=col, way='gap')
+    
+#     # 右边cbar_density
+#     add_cbar(vmin=vmin_density, vmax=vmax_density, 
+#              fig=fig, on_right=True, 
+#              col=col, way=way)   
+    
+    
+#     # suptitle：
+#     plt.suptitle(
+#             suptitle,
+#             fontsize=20,
+#             fontweight="bold",
+#             # y=0.98
+#         )
 
     
-    # no layout tight!!!!!
+#     # no layout tight!!!!!
 
-    ## save
-    if save and output_folder:
-        os.makedirs(output_folder, exist_ok=True)
-        filename=f"gap_comparaison_{col}_{way}_{loc}{'-'.join(dict_gdf_joined.keys())}.jpg"
-        outpath_fig=os.path.join(output_folder,filename)   
-        fig.savefig(outpath_fig, dpi=300)      
-        print(f"✅ [SAVE] comparasion gap map saved to {outpath_fig}!")
-    plt.show()
+#     ## save
+#     if save and output_folder:
+#         os.makedirs(output_folder, exist_ok=True)
+#         filename=f"gap_comparaison_{col}_{way}_{loc}{'-'.join(dict_gdf_joined.keys())}.jpg"
+#         outpath_fig=os.path.join(output_folder,filename)   
+#         fig.savefig(outpath_fig, dpi=300)      
+#         print(f"✅ [SAVE] comparasion gap map saved to {outpath_fig}!")
+#     plt.show()
        
     
-    return
+#     return
 
 
 
