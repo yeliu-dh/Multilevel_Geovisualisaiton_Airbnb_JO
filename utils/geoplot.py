@@ -10,6 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import mapclassify
 from matplotlib.cm import get_cmap
 from matplotlib.colors import LinearSegmentedColormap
+import matplotlib.patheffects as pe
 
 
 
@@ -250,7 +251,7 @@ def build_bounds_norm(
 def add_cbar_scheme(
     fig,
     # *,
-    scheme="continuous",      # "continuous" | "quantile" | "custom"
+    scheme="continuous",      # "continuous" | "quantile" | "userdefined"
     
     # 1) continus input
     vmin=None,
@@ -319,7 +320,9 @@ def add_cbar_scheme(
 
 
 
-def add_circle_legend(k, vmin_circle, vmax_circle,fig):
+
+
+def add_circle_legend(k, vmin_circle, vmax_circle, color="black"):
     #legend
     n_levels = 3  # legend 等级数
     legend_values = np.linspace(vmin_circle, vmax_circle, n_levels)
@@ -335,7 +338,7 @@ def add_circle_legend(k, vmin_circle, vmax_circle,fig):
             [], [],
             s=val * k/50 ,
             facecolors="none",
-            edgecolors="black",
+            edgecolors=color,#"black",
             linewidth=1,
             label=f"{val/50:.2f} hôtes"
         )
@@ -344,27 +347,108 @@ def add_circle_legend(k, vmin_circle, vmax_circle,fig):
     return circle_handles
 
 
-def add_legend(fig, k, vmin_circle, vmax_circle,
-               ):
-    
-    circle_handles=add_circle_legend(k, vmin_circle, vmax_circle,fig)
-    
-    fig.legend(
-        handles=circle_handles,
-        title="Nombre",
-        loc="upper right",
-        bbox_to_anchor=(0.94, 0.8),  # 调整 legend 内部位置
-        frameon=True,
 
-        fontsize=9,            # label 字号 ↑
-        title_fontsize=10,     # 标题字号 ↑
-        markerscale=1.4,       # 关键：放大圆
-        handlelength=1.6,      # 色块/符号长度
-        labelspacing=0.6,      # 行距
-        borderpad=0.6          # 内边距
+from matplotlib.lines import Line2D
+
+def add_star_legend(
+    label="Sites olympiques",
+    color="yellow",
+    # marker="*",
+    # markersize=8
+):
+    """
+    Create legend handle for Olympic venue stars
+    """
+    star_handles = Line2D(
+        [0], [0],
+        marker="*",
+        color="none",
+        markerfacecolor=color,
+        markeredgecolor=color,
+        markersize=8,
+        linestyle="None",
+        label=label
     )
+    return [star_handles]
 
 
+
+
+
+
+def draw_buffer(ax, gdf_points, buffer_dist=1000, buffer_label="Venue buffer", color='yellow'):
+    """
+    在地图上绘制 gdf_points 的缓冲区（单位：米）
+    """
+    # 1. 转为米（EPSG:2154）
+    gdf_m = gdf_points.to_crs(epsg=2154)
+
+    # 2. 计算 buffer（米）
+    gdf_m["buffer"] = gdf_m.geometry.buffer(buffer_dist)
+
+    # 3. 将 geometry 改为 buffer（关键步骤）
+    gdf_buffer = gdf_m.set_geometry("buffer")
+
+    # 4. 转回 WGS84（EPSG:4326）
+    gdf_buffer = gdf_buffer.to_crs(epsg=4326)
+
+    # 5. 绘制
+    gdf_buffer.plot(
+        ax=ax,
+        edgecolor=color,#"blue",
+        facecolor="none",#无填充颜色，不是None！
+        linewidth=1,
+        linestyle="-",
+        # alpha=0.1,
+        label=buffer_label
+    )
+    return #gdf_buffer
+
+
+
+def add_buffer_legend(
+    label,
+    color
+):
+    buffer_handles = Line2D(
+        [0], [0],
+        color=color,
+        linewidth=1.2,
+        linestyle="-",
+        label=label
+    )
+    return [buffer_handles]
+
+
+
+
+## show
+
+def add_legend(fig, circle_handles,star_handles, buffer_handles,
+                
+               ):
+    handles=[]
+    if circle_handles:   
+        handles.extend(circle_handles)
+    if star_handles:
+        handles.extend(star_handles)
+    if buffer_handles:
+        handles.extend(buffer_handles)
+        
+                
+    fig.legend(
+        handles=handles,
+        title="Légende",
+        loc="upper right",
+        bbox_to_anchor=(0.94, 0.8),
+        frameon=True,
+        fontsize=9,
+        title_fontsize=10,
+        markerscale=1.4,
+        handlelength=1.6,
+        labelspacing=0.6,
+        borderpad=0.6
+    )
 
 
 
@@ -513,6 +597,8 @@ def get_choropleth_map(gdf_joined,
             fontsize=fontsize_text,
             linespacing=1.2,
         )
+
+
     
     if gdf_venues is not None and not gdf_venues.empty:#不为none且不为空        
         # center
@@ -928,84 +1014,84 @@ def layout_comparison_gap(dict_gdf_joined,
 
 
 ##==============================choropleth+ratio+buffer=====================================
-def draw_buffer(ax, gdf_points, buffer_dist=3000, buffer_label="Venue buffer"):
-    """
-    在地图上绘制 gdf_points 的缓冲区（单位：米）
-    """
-    # 1. 转为米（EPSG:2154）
-    gdf_m = gdf_points.to_crs(epsg=2154)
 
-    # 2. 计算 buffer（米）
-    gdf_m["buffer"] = gdf_m.geometry.buffer(buffer_dist)
-
-    # 3. 将 geometry 改为 buffer（关键步骤）
-    gdf_buffer = gdf_m.set_geometry("buffer")
-
-    # 4. 转回 WGS84（EPSG:4326）
-    gdf_buffer = gdf_buffer.to_crs(epsg=4326)
-
-    # 5. 绘制
-    gdf_buffer.plot(
-        ax=ax,
-        edgecolor="skyblue",
-        facecolor="skyblue",
-        linewidth=1.2,
-        alpha=0.1,
-        label=buffer_label
-    )
-    return #gdf_buffer
 
 
 
 
 def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None, 
-            col_choropleth="ratio", col_circle="count", 
-            groupby="c_ar",
-            vmin_choro=None, vmax_choro=None, 
-            vmin_circle=None, vmax_circle=None, 
+            col_choropleth=None, col_circle=None, groupby="c_ar",
+            vmin_choro=None, vmax_choro=None, scheme='quantile', k_quantile=5, bins=None,
+            vmin_circle=None, vmax_circle=None, color_circle="red", color_star="yellow",color_text="black",
             fig=None, subax=None,
-            k=None,cmap=None,
-            title_cbar="Part des hôtes réactifs",
-            title="Part des hôtes réactifs par arrondissement et localisation des sites olympiques"
+            k=None,cmap='OrRd',
+            cbar_label="Proportion des hôtes",
+            title="Proportion des hôtes réactifs par arrondissement et localisation des sites olympiques"
         ):
     print(f"[input] CIRCLE (COUNT) vmin vmax :{vmin_circle}-{vmax_circle}")
 
-    if cmap==None:    
-        base = plt.cm.OrRd
-        colors = base(np.linspace(0.2, 0.7, 256))  # 只取中间浅色段
-        cmap_light = LinearSegmentedColormap.from_list("OrRd_light", colors)
-        cmap=cmap_light
-   
+    
     gdf_merged = gdf_map.merge(groups, on=groupby, how="left")
     # display(gdf_merged)
-    
     
     if not subax:
         fig, ax = plt.subplots(1, 1, figsize=(12, 10))
     else :
         ax=subax
-        
-        
+
+    
     # -------------------------choropleth-------------------------------
     if col_choropleth:
         if not subax and  vmin_choro is None and vmax_choro is None:
             vmin_choro=groups[col_choropleth].min()
             vmax_choro=groups[col_choropleth].max()
+            values_choro=groups[col_choropleth]
+            
             print("vmin vmax of current groups:", vmin_choro, vmax_choro)
         else :
             print(f"[input] CHORO (RATIO) vmin vmax :{vmin_choro}-{vmax_choro}")
+        # same color for map and cbar:
+        bounds, norm=build_bounds_norm(
+            scheme=scheme,
+            vmin=vmin_choro,
+            vmax=vmax_choro,
+            values=values_choro,
+            k_quantile=5,
+            bins=bins,
+            cmap=cmap
+        )
         
+        # add color to map :  
         gdf_merged.plot(
             column=col_choropleth,
             ax=ax,
+            legend=False,
+            norm=norm,
+            cmap=cmap,
+            edgecolor='black',
+            linewidth=0.5
+        )
+        
+        # show cbar:
+        add_cbar_scheme(
+            fig,
+            scheme=scheme,      # "continuous" | "quantile" | "custom"
+            # 1) continus input
             vmin=vmin_choro,
             vmax=vmax_choro,
-            legend=False, #默认都不画cbar，自动生成的难以控制位置和大小
-            cmap=cmap,       
-            edgecolor="black",
-            linewidth=0.5
-        ) 
-
+            # 2) quantile input
+            values=values_choro,              # for scheme quantile
+            k_quantile=k_quantile,                      # number of classes for quantile
+            # 3) custom input
+            bins=bins,              
+            
+            # layout
+            on_right=True,
+            cbar_label=cbar_label,
+            cmap=cmap,
+            tick_format="{:.2f}"
+        )    
+   
         # 坐标与文字：
         for idx, row in gdf_merged.iterrows():
             x = row.geometry.centroid.x
@@ -1016,13 +1102,13 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
                 ha="center",
                 va="center",
                 fontsize=8,
-                linespacing=1.2,
-            )
-        if not subax: 
-            add_cbar(vmin=vmin_choro, vmax=vmax_choro, 
-                fig=fig, on_right=True, 
-                cbar_label='proportion de hôte', cmap=cmap)
+                linespacing=1.5,
+                color=color_text,
+                path_effects=[pe.withStroke(linewidth=1.5, foreground="white")]
 
+            )
+                   
+    
     #----------------------porportional circle--------------------
     if col_circle:
         if not vmin_circle and not vmax_circle :
@@ -1035,37 +1121,69 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
             print(f"suitable k : {k}!")
 
         # k = 5  # 缩放因子，按效果调
+        # centroids = gdf_merged.geometry.centroid
+        # ax.scatter(
+        #     centroids.x,
+        #     centroids.y,
+        #     s = gdf_merged[col_circle] * k,   # ← 可替换
+        #     facecolors="none",
+        #     edgecolors=color_circle,
+        #     linewidth=1,
+        #     zorder=2
+        # )   
+        
         centroids = gdf_merged.geometry.centroid
-        ax.scatter(
+        sc = ax.scatter(
             centroids.x,
             centroids.y,
-            s = gdf_merged[col_circle] * k,   # ← 可替换
+            s=gdf_merged[col_circle] * k,
             facecolors="none",
-            edgecolors="black",
+            edgecolors=color_circle,
             linewidth=1,
-            zorder=2
-        )   
+            zorder=6
+        )
+
+        # 给 circle 加白描边
+        sc.set_path_effects([
+            pe.Stroke(linewidth=1.5, foreground="white"),
+            pe.Normal()
+        ])
+
+        
         if not subax:        
-            add_circle_legend(k=5, vmin_circle=vmin_circle, vmax_circle=vmax_circle,fig=fig)
+            circle_handles=add_circle_legend(k=k, vmin_circle=vmin_circle, vmax_circle=vmax_circle,color=color_circle)
             
-        
     
-    #--------------------------venues------------------------------
+    #--------------------------venues(star+buffer)------------------------------
     if not gdf_venues is None and not gdf_venues.empty:
-        label="Sites olympiques"
-        if add_buffer_m!=None and add_buffer_m!=0:
-            draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer")
-            label=f"Sites olympiques (buffer {add_buffer_m/1000:.1f}km)"
         
+        # add buffer
+        if add_buffer_m!=None and add_buffer_m!=0:
+            draw_buffer(ax, gdf_venues, buffer_dist=add_buffer_m, buffer_label="Venue buffer", color=color_star)
+            
         # center
         gdf_venues = gdf_venues.to_crs(gdf_merged.crs)
         gdf_venues.plot(
             ax=ax, 
             markersize=100, 
-            color="blue", 
+            color=color_star, 
             marker="*",
-            label=label
+            # label=label
         )
+    
+        # 统一图例:
+        
+        if add_buffer_m!=0:
+            buffer_handles=add_buffer_legend(label=f"buffer {add_buffer_m/1000:.1f}km", color=color_star)
+        star_handles = add_star_legend(
+            label="Sites olympiques",
+            color=color_star
+        )
+        
+    # show all legends:
+    add_legend(fig, circle_handles=circle_handles, star_handles=star_handles, buffer_handles=buffer_handles)
+    
+
     #-------------------------titile------------------------
     ax.set_title(title, fontsize=10, pad=10)# pad btw title & ax
     ax.axis("off")
