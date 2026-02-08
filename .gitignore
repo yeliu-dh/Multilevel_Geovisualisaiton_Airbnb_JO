@@ -1,9 +1,11 @@
 sandbox/*
-data*/*
-notebooks/*
+data_listings/*
+data_processed/*/*
+data_geo/Q1Q2Q3/*
 gdf_*/*
-output*/*
 
+# notebooks/*
+# output*/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
