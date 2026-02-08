@@ -12,7 +12,7 @@ L'objectif est d'analyser les **comportements stratégique des hôtes**, que ce 
 - **Source** : Données disponible sur le site [Inside Airbnb](https://insideairbnb.com/get-the-data/)
 
 - **Période** : Mars, Juin, Septembre 2024 à Paris (Avant, pendant et après la préparation des Jeux Olympiques)
-- **Variables** : Coordonnées géographiques (latitude, longtitude), prix, disponibilité dans les 90 jours suivant, description personnelle, description sur l'annonce, description sur le voisinage, etc.
+- **Variables** : Coordonnées géographiques (latitude, longtitude), prix, disponibilité dans les 90 jours suivant, description personnelle, description sur l'annonce, description du quartier, etc.
 
 ### Données complémentaires
 - Carte de quartiers Paris : data_map\paris_ar.gpkg
