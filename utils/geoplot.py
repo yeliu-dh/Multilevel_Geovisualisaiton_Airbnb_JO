@@ -1055,7 +1055,8 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
             fig=None, subax=None,
             k=None,cmap='OrRd',
             cbar_label="Proportion des hôtes",
-            title="Proportion des hôtes réactifs par arrondissement et localisation des sites olympiques"
+            title="Proportion des hôtes réactifs par arrondissement et localisation des sites olympiques",
+            save=False, output_folder=False, filename=None,
         ):
     print(f"[input] CIRCLE (COUNT) vmin vmax :{vmin_circle}-{vmax_circle}")
 
@@ -1210,7 +1211,20 @@ def get_choro_circle_map(groups, gdf_map, gdf_venues=None,add_buffer_m=None,
     ax.axis("off")
     # ax.legend()
     # plt.show()
-  
+    
+    #save
+    if subax is None and save and output_folder:
+        os.makedirs(output_folder, exist_ok=True)
+        if not filename:
+            filename=f"map_choro_circle.jpg"
+        outpath_fig=os.path.join(output_folder,filename)   
+        fig.savefig(outpath_fig, dpi=300)      
+        print(f"✅ [SAVE] map saved to {outpath_fig}!")
+    
+    plt.show()     
+        
+         
+         
     return plt
 
 
