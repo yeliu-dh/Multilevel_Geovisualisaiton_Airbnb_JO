@@ -42,7 +42,7 @@ Nouveaux hôtes (depuis 2024) , hôtes qui reviennent en juin (n’existe pas da
 
 ## Résultats et analyses :
 
--**Tendances globales**:
+- **Tendances globales**:
 
 1.Densité des hôtes : Augmentation forte en juin, surtout 11e, 15e, 17e, 18e arrondissements, proches aux sites olympiques, réduction en septembre.
 
