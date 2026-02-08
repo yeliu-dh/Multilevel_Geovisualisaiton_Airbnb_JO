@@ -19,7 +19,7 @@ L'objectif est d'analyser les **comportements stratégique des hôtes**, que ce 
 - **carte de sites olympiques principaux** : data_geo\main_venues_JO.gpkg
  
 
-## Methodologie / 方法
+## Methodologie
 - **Variable clé**: Hôtes en changement (is_changed):
 a) Au niveau de participation 
 - Nouveaux hôtes (depuis 2024) ,
