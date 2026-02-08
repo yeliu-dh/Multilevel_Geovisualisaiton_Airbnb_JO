@@ -1,6 +1,6 @@
 <!-- # PROJET HNS : Multilevel_Geovisualisaiton_Airbnb_JO -->
 # Les Jeux olympiques de Paris 2024 et les hôtes Airbnb : 
-une analyse spatialisée de la participation au marché et des stratégies de communication
+**une analyse spatialisée de la participation au marché et des stratégies de communication**
 
 ## Introduction
 Ce projet étudie l'impact des **Jeux Olympiques et Paralympiques de Paris 2024** sur le marché Airbnb à Paris.  
@@ -25,7 +25,6 @@ L'objectif est d'analyser les **comportements stratégique des hôtes**, que ce 
 Nouveaux hôtes (depuis 2024) , hôtes qui reviennent en juin (n’existe pas dans les données de mars), hôtes qui réouvrent leur disponibilité pour JO (disponibilité_90=0 en mars);
 
 - Au niveau de présentation de soi : Hôtes qui modifient sa description ou /et la photo personnelle(s).
-
 
 
 ## Problématique et hypothèses :
