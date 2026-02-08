@@ -26,9 +26,7 @@ Nouveaux hôtes (depuis 2024) , hôtes qui reviennent en juin (n’existe pas da
 
 - Au niveau de présentation de soi : Hôtes qui modifient sa description ou /et la photo personnelle(s).
 
-- **Approches**:
 
-Visualisation des tendances de l'offre et de la demande avant et pendant l'événement dans l'espace parisien.
 
 ## Problématique et hypothèses :
 - **Problématique** : Comment l’approche des Jeux Olympiques de Paris 2024 a-t-elle influencé la participation et les stratégies communicatives des hôtes sur Airbnb ?
