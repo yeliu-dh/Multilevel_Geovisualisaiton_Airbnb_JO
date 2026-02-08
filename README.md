@@ -1,5 +1,5 @@
-<!-- # PROJET HNS : Multilevel_Geovisualisaiton_Airbnb_JO -->
-# Les Jeux olympiques de Paris 2024 et les hôtes Airbnb : 
+# PROJET HNS : Multilevel_Geovisualisaiton_Airbnb_JO
+**Les Jeux olympiques de Paris 2024 et les hôtes Airbnb :**
 **une analyse spatialisée de la participation au marché et des stratégies de communication**
 
 ## Introduction
